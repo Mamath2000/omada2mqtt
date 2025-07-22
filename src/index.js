@@ -2,6 +2,7 @@ const mqtt = require('mqtt');
 const config = require('./utils/config');
 const omadaAuth = require('./omadaAuth');
 const OmadaApi = require('./omadaApi');
+const haDiscovery = require('./haDiscovery');
 const logger = require('./utils/logger');
 
 // Applique le niveau de log depuis la config
@@ -32,9 +33,19 @@ async function main() {
   mqttClient.on('connect', async () => {
     log('info', 'Connecté au broker MQTT');
     omadaApi.setMqttClient(mqttClient);
-    
+
     // Démarrage du polling automatique (devices et ports)
-    omadaApi.startPolling(60, 5);
+    await omadaApi.startPolling(60, 5);
+
+    // Rafraîchit immédiatement la liste des devices et ports pour Home Assistant
+    const devices = await omadaApi.refreshDevicesAndPorts();
+    if (devices && Object.keys(devices).length > 0) {
+      log('info', 'Publication de la configuration Home Assistant MQTT Discovery');
+      haDiscovery.publishHADiscovery(mqttClient, devices);
+    } else {
+      log('warn', 'Aucun device trouvé pour la publication Home Assistant.');
+    }
+
     // Souscription aux commandes PoE
     mqttClient.subscribe(`${config.mqtt.baseTopic}/switch/+/ports/+/poeState/set`, (err) => {
       if (err) {

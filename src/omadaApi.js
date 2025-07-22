@@ -3,6 +3,14 @@ const config = require('./utils/config');
 const { log } = require('./utils/logger');
 
 class OmadaApi {
+    /**
+     * Rafraîchit immédiatement la liste des devices et des ports (remplit this.devices)
+     */
+    async refreshDevicesAndPorts() {
+        await this.#publishAllDevices();
+        await this.#publishSwitchPorts();
+        return this.getDevices();
+    }
     constructor(omadaAuth) {
         this.omadaAuth = omadaAuth;
         // Structure : { [switchName]: { device: {...}, ports: { [portNum]: {...} } }, ... }
@@ -19,6 +27,7 @@ class OmadaApi {
      */
     startPolling(deviceInterval = 60, portInterval = 5) {
         this.#publishAllDevices();
+        this.#publishSwitchPorts();
 
         this._polling = this._polling || {};
         // Devices
