@@ -1,113 +1,260 @@
-// omadaApi.js : Fonctions d'accès aux données Omada (hors authentification)
+// omadaApi.js : Classe d'accès aux données Omada (hors authentification)
 const config = require('./config');
 const { log } = require('./logger');
 
-/**
- * Récupère tous les devices du site Omada et publie chaque device sur MQTT.
- * @param {object} omadaAuth - Le client d'authentification Omada (doit contenir api et siteId)
- * @param {object} mqttClient - Le client MQTT connecté
- */
-
-async function publishAllDevices(omadaAuth, mqttClient) {
-    try {
-        const siteId = omadaAuth.siteId;
-        if (!siteId) {
-            log('error', 'siteId Omada non défini.');
-            return [];
-        }
-        const url = `/openapi/v1/${config.omada.omadac_id}/sites/${siteId}/devices?pageSize=100&page=1`;
-        const response = await omadaAuth.api.get(url);
-        if (response.data.errorCode === 0 && response.data.result && response.data.result.data) {
-            const devices = response.data.result.data;
-            log('info', `${devices.length} devices trouvés sur le site.`);
-            const deviceList = devices.map(device => {
-                const type = (device.type || '').toLowerCase();
-                if (!type || type === 'unknown') {
-                    log('warn', 'deviceType/type manquant pour le device:', device);
-                    return; // Passer à l'élément suivant sans traiter ce device
-                }
-                const name = (device.name || 'unknown')
-                    .toLowerCase()
-                    .replace(/[\s-]+/g, '_');
-                const topic = `${config.mqtt.baseTopic}/${type}/${name}`;
-                mqttClient.publish(topic, JSON.stringify(device), { retain: false }, (err) => {
-                    if (err) {
-                        log('error', `Publication MQTT échouée pour ${topic}:`, err);
-                    } else {
-                        log('info', `Données publiées sur ${topic}`);
-                    }
-                });
-                return { type, name, device };
-            });
-            return deviceList;
-        } else {
-            log('warn', 'Erreur lors de la récupération des devices, réponse inattendue:', response.data);
-            return [];
-        }
-    } catch (error) {
-        log('error', 'Erreur lors de la récupération des devices Omada:', error.response ? error.response.data : error.message);
-        return [];
+class OmadaApi {
+    constructor(omadaAuth) {
+        this.omadaAuth = omadaAuth;
+        this.devices = [];
+        this.portsState = {}; // { switchName: { portNum: { ...infos } } }
+        this.mqttClient = null;
+        this.siteId = omadaAuth.siteId || null;
     }
-}
 
-/**
- * Récupère les informations de ports pour chaque switch du site et publie sur MQTT.
- * @param {object} omadaAuth - Le client d'authentification Omada
- * @param {object} mqttClient - Le client MQTT connecté
- * @param {Array} [switches] - (optionnel) Liste des switches déjà connus
- */
+    /**
+     * Démarre le polling automatique des devices et ports
+     * @param {object} mqttClient - Le client MQTT connecté
+     * @param {number} deviceInterval - Intervalle de polling des devices (s)
+     * @param {number} portInterval - Intervalle de polling des ports (s)
+     */
+    startPolling(deviceInterval = 60, portInterval = 5) {
+        this.#publishAllDevices();
 
-async function publishSwitchPorts(omadaAuth, mqttClient, switches) {
-    const siteId = omadaAuth.siteId;
-    if (!siteId) {
-        log('error', 'siteId Omada non défini.');
-        return;
+        this._polling = this._polling || {};
+        // Devices
+        if (this._polling.device) clearInterval(this._polling.device);
+        this._polling.device = setInterval(() => {
+            this.#publishAllDevices();
+        }, deviceInterval * 1000);
+
+        // Ports
+        if (this._polling.port) clearInterval(this._polling.port);
+        this._polling.port = setInterval(() => {
+            this.#publishSwitchPorts();
+        }, portInterval * 1000);
     }
-    for (const sw of switches || []) {
-        // Pour chaque switch, on va chercher les infos de ports
-        const switchMac = sw.mac;
-        const identifier = (sw.name || 'unknown')
-            .toLowerCase()
-            .replace(/[\s-]+/g, '_');
 
-        if (!switchMac) {
-            log('warn', 'Impossible de trouver la MAC Adresse du switch:', sw);
-            continue;
+    /**
+     * Arrête le polling automatique
+     */
+    stopPolling() {
+        if (this._polling) {
+            if (this._polling.device) clearInterval(this._polling.device);
+            if (this._polling.port) clearInterval(this._polling.port);
+            this._polling = {};
         }
-        if (!identifier.includes('p')) {
-            log('debug', `Le switch ${identifier} n'a pas de port POE (nom sans 'p').`);
-            continue;
-        }
+    }
+    
+    /**
+     * Récupère tous les devices du site Omada et publie chaque device sur MQTT.
+     * Met à jour le cache interne des devices.
+     */
+    async #publishAllDevices() {
+        if (!this.isSiteIdSet()) return;
 
-        const portsUrl = `/openapi/v1/${config.omada.omadac_id}/sites/${siteId}/switches/${switchMac}`;
         try {
-            const portsResp = await omadaAuth.api.get(portsUrl);
-            log('debug', `Récupération des ports pour le switch ${switchMac} (${portsResp})`);
-            if (portsResp.data.errorCode === 0 && portsResp.data.result && portsResp.data.result.portList) {
-                const ports = portsResp.data.result.portList;
-                for (const element of ports) {
-                    const portNum = element.port;
-                    const topic = `${config.mqtt.baseTopic}/switch/${identifier}/ports/port${portNum}_poe_switch`;
-                    const payload = element.poeMode === 1 ? 'on' : 'off'; // Assumant que 1 est "on" et 0 est "off"
-                    mqttClient.publish(topic, payload, { retain: false }, (err) => {
-                        if (err) {
-                            log('error', `Publication MQTT échouée pour ${topic}:`, err);
-                        } else {
-                            log('debug', `Données port ${portNum} publiées sur ${topic}`);
-                        }
-                    });
-                }
+            const url = `/openapi/v1/${config.omada.omadac_id}/sites/${this.siteId}/devices?pageSize=100&page=1`;
+            const response = await this.omadaAuth.api.get(url);
+            if (response.data.errorCode === 0 && response.data.result && response.data.result.data) {
+                const devices = response.data.result.data;
+                log('info', `${devices.length} devices trouvés sur le site.`);
+                this.devices = devices;
+                const deviceList = devices.map(device => {
+                    const type = (device.type || '').toLowerCase();
+                    if (!type || type === 'unknown') {
+                        log('warn', 'deviceType/type manquant pour le device:', device);
+                        return;
+                    }
+                    const name = (device.name || 'unknown')
+                        .toLowerCase()
+                        .replace(/[\s-]+/g, '_');
+                    const topic = `${config.mqtt.baseTopic}/${type}/${name}`;
+                    if (this.mqttClient) {
+                        this.mqttClient.publish(topic, JSON.stringify(device), { retain: false }, (err) => {
+                            if (err) {
+                                log('error', `Publication MQTT échouée pour ${topic}:`, err);
+                            } else {
+                                log('info', `Données publiées sur ${topic}`);
+                            }
+                        });
+                    }
+                    return { type, name, device };
+                });
+                return deviceList;
             } else {
-                log('warn', `Erreur lors de la récupération des ports pour le switch ${switchMac}:`, portsResp);
+                log('warn', 'Erreur lors de la récupération des devices, réponse inattendue:', response.data);
+                return [];
             }
-        } catch (err) {
-            log('error', `Exception lors de la récupération des ports pour le switch ${switchMac}:`, err.response ? err.response.data : err.message);
+        } catch (error) {
+            log('error', 'Erreur lors de la récupération des devices Omada:', error.response ? error.response.data : error.message);
+            return [];
         }
     }
+
+    /**
+     * Récupère les informations de ports pour chaque switch du site et publie sur MQTT.
+     * Met à jour le cache interne des états de ports.
+     * @param {object} mqttClient - Le client MQTT connecté
+     */
+    async #publishSwitchPorts() {
+        if (!this.isSiteIdSet()) return;
+
+        const switches = (this.getDevices() || []).filter(d => d && (d.type || '').toLowerCase() === 'switch');
+
+        for (const sw of switches || []) {
+            const switchMac = sw.mac;
+            const identifier = (sw.name || 'unknown')
+                .toLowerCase()
+                .replace(/[\s-]+/g, '_');
+
+            if (!switchMac) {
+                log('warn', 'Impossible de trouver la MAC Adresse du switch:', sw);
+                continue;
+            }
+            const isPoeSwitch = identifier.includes('p');
+            const portsUrl = `/openapi/v1/${config.omada.omadac_id}/sites/${this.siteId}/switches/${switchMac}`;
+            try {
+                const portsResp = await this.omadaAuth.api.get(portsUrl);
+                log('debug', `Récupération des ports pour le switch ${switchMac} (${portsResp})`);
+                if (portsResp.data.errorCode === 0 && portsResp.data.result && portsResp.data.result.portList) {
+                    const ports = portsResp.data.result.portList;
+                    if (!this.portsState[identifier]) this.portsState[identifier] = {};
+                    for (const element of ports) {
+                        const portNum = element.port;
+                        const topic = `${config.mqtt.baseTopic}/switch/${identifier}/ports/port${portNum}`;
+                        const publishData = {
+                            name: element.name,
+                            isPOE: isPoeSwitch,
+                            profileName: element.profileName,
+                            profileOverrideEnable: element.profileOverrideEnable,
+                            poeState: element.poeMode === 1 ? 'on' : 'off',
+                        };
+                        this.portsState[identifier][portNum] = publishData;
+                        if (this.mqttClient) {
+                            Object.entries(publishData).forEach(([key, value]) => {
+                                const fieldTopic = `${topic}/${key}`;
+                                this.mqttClient.publish(fieldTopic, JSON.stringify(value), { retain: false }, (err) => {
+                                    if (err) {
+                                        log('error', `Publication MQTT échouée pour ${fieldTopic}:`, err);
+                                    } else {
+                                        log('debug', `Champ ${key} du port ${portNum} publié sur ${fieldTopic}`);
+                                    }
+                                });
+                            });
+                        }
+                    }
+                } else {
+                    log('warn', `Erreur lors de la récupération des ports pour le switch ${switchMac}:`, portsResp);
+                }
+            } catch (err) {
+                log('error', `Exception lors de la récupération des ports pour le switch ${switchMac}:`, err.response ? err.response.data : err.message);
+            }
+        }
+    }
+
+    /**
+     * Applique une commande on/off sur un port PoE d'un switch Omada
+     * @param {string} switchName - Nom normalisé du switch (identifiant MQTT)
+     * @param {number|string} portNum - Numéro du port à contrôler
+     * @param {string} action - 'on' ou 'off'
+     * @returns {Promise<void>}
+     */
+    async setSwitchPortPoe(switchName, portNum, action) {
+        if (!this.isSiteIdSet()) return;
+
+        // Vérifier que le switch existe dans portsState
+        if (!this.portsState[switchName] || !this.portsState[switchName][portNum]) {
+            log('warn', `Switch ${switchName} ou port ${portNum} non trouvé dans portsState.`);
+            return;
+        }
+
+        // Récupérer le device pour la MAC
+        let switchDevice = this.devices.find(device => {
+            const type = (device.type || '').toLowerCase();
+            const name = (device.name || 'unknown').toLowerCase().replace(/[\s-]+/g, '_');
+            return type === 'switch' && name === switchName;
+        });
+        if (!switchDevice) {
+            log('warn', `Switch ${switchName} non trouvé dans la liste des devices.`);
+            return;
+        }
+        const switchMac = switchDevice.mac;
+        const poeMode = action === 'on' ? 1 : 0;
+
+        // Vérifier l'état de profileOverrideEnable
+        const portState = this.portsState[switchName][portNum];
+        if (portState.profileOverrideEnable === false) {
+            // Activer l'override du profil
+            const overrideUrl = `/openapi/v1/${config.omada.omadac_id}/sites/${this.siteId}/switches/${switchMac}/ports/${portNum}/profile-override`;
+            try {
+                const overrideResp = await this.omadaAuth.api.put(overrideUrl, { profileOverrideEnable: true });
+                if (overrideResp.data.errorCode === 0) {
+                    log('info', `Override du profil activé pour port ${portNum} du switch ${switchName}`);
+                    // Mettre à jour le cache local
+                    this.portsState[switchName][portNum].profileOverrideEnable = true;
+                    sleep(2000); // Attendre un peu pour que l'override soit pris en compte
+                } else {
+                    log('warn', `Erreur lors de l'activation de l'override du profil pour port ${portNum} (${switchName}):`, overrideResp.data);
+                    return;
+                }
+            } catch (e) {
+                log('error', `Exception lors de l'activation de l'override du profil pour port ${portNum} (${switchName}):`, e.response ? e.response.data : e.message);
+                return;
+            }
+        }
+
+        // Mettre à jour le mode PoE
+        const poeUrl = `/openapi/v1/${config.omada.omadac_id}/sites/${this.siteId}/switches/${switchMac}/ports/${portNum}/poe-mode`;
+        try {
+            const poeResp = await this.omadaAuth.api.put(poeUrl, { poeMode: poeMode });
+            if (poeResp.data.errorCode === 0) {
+                log('info', `PoE du port ${portNum} du switch ${switchName} mis à jour: ${action}`);
+                // Mettre à jour le cache local
+                this.portsState[switchName][portNum].poeState = action;
+            } else {
+                log('warn', `Erreur lors de la mise à jour PoE du port ${portNum} (${switchName}):`, poeResp.data);
+                return;
+            }
+        } catch (e) {
+            log('error', `Exception lors de la mise à jour PoE du port ${portNum} (${switchName}):`, e.response ? e.response.data : e.message);
+            return;
+        }
+
+        // Rafraîchir les ports
+        await this.#publishSwitchPorts();
+    }
+
+    /**
+     * Retourne la liste courante des devices (cache)
+     */
+    getDevices() {
+        return this.devices;
+    }
+
+    /**
+     * Retourne l'état courant des ports (cache)
+     */
+    getPortsState() {
+        return this.portsState;
+    }
+
+    /**
+     * Check si le siteId est défini
+     * @returns {boolean} - true si le siteId est défini, false sinon
+     */
+    isSiteIdSet() {
+        if (!this.siteId) this.siteId = this.omadaAuth.siteId;
+        if (!this.siteId) log('error', 'siteId Omada non défini.');
+        return !!this.siteId;
+    }
+
+    /**
+     * Définit le client MQTT à utiliser pour toutes les publications
+     * @param {object} mqttClient - Le client MQTT connecté
+     */
+    setMqttClient(mqttClient) {
+        this.mqttClient = mqttClient;
+    }    
 }
 
-
-module.exports = {
-    publishAllDevices,
-    publishSwitchPorts
-};
+module.exports = OmadaApi;
