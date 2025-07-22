@@ -5,8 +5,8 @@ const { log } = require('./logger');
 class OmadaApi {
     constructor(omadaAuth) {
         this.omadaAuth = omadaAuth;
-        this.devices = [];
-        this.portsState = {}; // { switchName: { portNum: { ...infos } } }
+        // Structure : { [switchName]: { device: {...}, ports: { [portNum]: {...} } }, ... }
+        this.devices = {}; 
         this.mqttClient = null;
         this.siteId = omadaAuth.siteId || null;
     }
@@ -56,10 +56,10 @@ class OmadaApi {
             const url = `/openapi/v1/${config.omada.omadac_id}/sites/${this.siteId}/devices?pageSize=100&page=1`;
             const response = await this.omadaAuth.api.get(url);
             if (response.data.errorCode === 0 && response.data.result && response.data.result.data) {
-                const devices = response.data.result.data;
-                log('info', `${devices.length} devices trouvés sur le site.`);
-                this.devices = devices;
-                const deviceList = devices.map(device => {
+                const devicesArr = response.data.result.data;
+                log('info', `${devicesArr.length} devices trouvés sur le site.`);
+                this.devices = {};
+                devicesArr.forEach(device => {
                     const type = (device.type || '').toLowerCase();
                     if (!type || type === 'unknown') {
                         log('warn', 'deviceType/type manquant pour le device:', device);
@@ -68,6 +68,8 @@ class OmadaApi {
                     const name = (device.name || 'unknown')
                         .toLowerCase()
                         .replace(/[\s-]+/g, '_');
+                    if (!this.devices[name]) this.devices[name] = { device, ports: {} };
+                    else this.devices[name].device = device;
                     const topic = `${config.mqtt.baseTopic}/${type}/${name}`;
                     if (this.mqttClient) {
                         this.mqttClient.publish(topic, JSON.stringify(device), { retain: false }, (err) => {
@@ -78,9 +80,8 @@ class OmadaApi {
                             }
                         });
                     }
-                    return { type, name, device };
                 });
-                return deviceList;
+                return Object.keys(this.devices).map(name => ({ name, ...this.devices[name] }));
             } else {
                 log('warn', 'Erreur lors de la récupération des devices, réponse inattendue:', response.data);
                 return [];
@@ -99,14 +100,13 @@ class OmadaApi {
     async #publishSwitchPorts() {
         if (!this.isSiteIdSet()) return;
 
-        const switches = (this.getDevices() || []).filter(d => d && (d.type || '').toLowerCase() === 'switch');
+        // On ne traite que les switches
+        const switches = Object.entries(this.devices)
+            .filter(([name, entry]) => entry.device && (entry.device.type || '').toLowerCase() === 'switch');
 
-        for (const sw of switches || []) {
+        for (const [identifier, entry] of switches) {
+            const sw = entry.device;
             const switchMac = sw.mac;
-            const identifier = (sw.name || 'unknown')
-                .toLowerCase()
-                .replace(/[\s-]+/g, '_');
-
             if (!switchMac) {
                 log('warn', 'Impossible de trouver la MAC Adresse du switch:', sw);
                 continue;
@@ -118,7 +118,7 @@ class OmadaApi {
                 log('debug', `Récupération des ports pour le switch ${switchMac} (${portsResp})`);
                 if (portsResp.data.errorCode === 0 && portsResp.data.result && portsResp.data.result.portList) {
                     const ports = portsResp.data.result.portList;
-                    if (!this.portsState[identifier]) this.portsState[identifier] = {};
+                    if (!this.devices[identifier].ports) this.devices[identifier].ports = {};
                     for (const element of ports) {
                         const portNum = element.port;
                         const topic = `${config.mqtt.baseTopic}/switch/${identifier}/ports/port${portNum}`;
@@ -129,7 +129,7 @@ class OmadaApi {
                             profileOverrideEnable: element.profileOverrideEnable,
                             poeState: element.poeMode === 1 ? 'on' : 'off',
                         };
-                        this.portsState[identifier][portNum] = publishData;
+                        this.devices[identifier].ports[portNum] = publishData;
                         if (this.mqttClient) {
                             Object.entries(publishData).forEach(([key, value]) => {
                                 const fieldTopic = `${topic}/${key}`;
@@ -162,36 +162,25 @@ class OmadaApi {
     async setSwitchPortPoe(switchName, portNum, action) {
         if (!this.isSiteIdSet()) return;
 
-        // Vérifier que le switch existe dans portsState
-        if (!this.portsState[switchName] || !this.portsState[switchName][portNum]) {
-            log('warn', `Switch ${switchName} ou port ${portNum} non trouvé dans portsState.`);
+        // Vérifier que le switch et le port existent dans la nouvelle structure
+        if (!this.devices[switchName] || !this.devices[switchName].ports[portNum]) {
+            log('warn', `Switch ${switchName} ou port ${portNum} non trouvé dans devices.`);
             return;
         }
 
-        // Récupérer le device pour la MAC
-        let switchDevice = this.devices.find(device => {
-            const type = (device.type || '').toLowerCase();
-            const name = (device.name || 'unknown').toLowerCase().replace(/[\s-]+/g, '_');
-            return type === 'switch' && name === switchName;
-        });
-        if (!switchDevice) {
-            log('warn', `Switch ${switchName} non trouvé dans la liste des devices.`);
-            return;
-        }
+        const switchDevice = this.devices[switchName].device;
         const switchMac = switchDevice.mac;
         const poeMode = action === 'on' ? 1 : 0;
 
         // Vérifier l'état de profileOverrideEnable
-        const portState = this.portsState[switchName][portNum];
+        const portState = this.devices[switchName].ports[portNum];
         if (portState.profileOverrideEnable === false) {
-            // Activer l'override du profil
             const overrideUrl = `/openapi/v1/${config.omada.omadac_id}/sites/${this.siteId}/switches/${switchMac}/ports/${portNum}/profile-override`;
             try {
                 const overrideResp = await this.omadaAuth.api.put(overrideUrl, { profileOverrideEnable: true });
                 if (overrideResp.data.errorCode === 0) {
                     log('info', `Override du profil activé pour port ${portNum} du switch ${switchName}`);
-                    // Mettre à jour le cache local
-                    this.portsState[switchName][portNum].profileOverrideEnable = true;
+                    this.devices[switchName].ports[portNum].profileOverrideEnable = true;
                     sleep(2000); // Attendre un peu pour que l'override soit pris en compte
                 } else {
                     log('warn', `Erreur lors de l'activation de l'override du profil pour port ${portNum} (${switchName}):`, overrideResp.data);
@@ -209,8 +198,7 @@ class OmadaApi {
             const poeResp = await this.omadaAuth.api.put(poeUrl, { poeMode: poeMode });
             if (poeResp.data.errorCode === 0) {
                 log('info', `PoE du port ${portNum} du switch ${switchName} mis à jour: ${action}`);
-                // Mettre à jour le cache local
-                this.portsState[switchName][portNum].poeState = action;
+                this.devices[switchName].ports[portNum].poeState = action;
             } else {
                 log('warn', `Erreur lors de la mise à jour PoE du port ${portNum} (${switchName}):`, poeResp.data);
                 return;
@@ -225,17 +213,10 @@ class OmadaApi {
     }
 
     /**
-     * Retourne la liste courante des devices (cache)
+     * Retourne la structure complète des devices (avec ports)
      */
     getDevices() {
         return this.devices;
-    }
-
-    /**
-     * Retourne l'état courant des ports (cache)
-     */
-    getPortsState() {
-        return this.portsState;
     }
 
     /**
