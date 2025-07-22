@@ -50,11 +50,35 @@ module.exports = {
 - `username` / `password` : Identifiants MQTT (laisser vide si non utilisé)
 - `baseTopic` : Topic racine pour les échanges MQTT
 
+
 ## Fonctionnement
 
 1. Le programme se connecte à Omada, récupère et renouvelle automatiquement le token.
 2. Il se connecte au broker MQTT et s'abonne aux topics nécessaires.
-3. Il publie ou traite les messages MQTT selon la logique métier (contrôle PoE, etc.).
+3. Il publie les informations des devices et des ports PoE sur MQTT.
+
+### Publication des ports PoE
+
+Pour chaque switch détecté, le programme publie l'état de chaque port PoE sur un topic dédié toutes les 5 secondes.
+
+- **Format du topic :**
+  
+  ```
+  <baseTopic>/switch/<nom_du_switch>/ports/port<numero>_poe_switch
+  ```
+  
+  Exemple :
+  
+  ```
+  omada/switch/switch1/ports/port5_poe_switch
+  ```
+
+- **Payload :**
+  - `on` si le port PoE est activé
+  - `off` si le port PoE est désactivé
+
+Le nom du switch est normalisé (minuscules, espaces et tirets remplacés par `_`).
+Seuls les ports PoE sont publiés (filtrage possible selon le nom du switch).
 
 ## Lancement
 
