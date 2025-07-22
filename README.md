@@ -19,24 +19,29 @@ Ce projet permet de faire le pont entre un contrôleur TP-Link Omada et un broke
 3. **Récupération des sites** :
    - Appel à `/openapi/v1/{omadac_id}/sites?pageSize=100&page=1` avec le header `Authorization: AccessToken=...`.
 
-## Paramètres de configuration (`src/config.js`)
 
-```js
-module.exports = {
-  omada: {
-    baseUrl: 'https://<IP_DU_CONTROLEUR>:8043',
-    client_id: '<VOTRE_CLIENT_ID>',
-    client_secret: '<VOTRE_CLIENT_SECRET>',
-    omadac_id: '<VOTRE_OMADAC_ID>',
-    site: '<NOM_DU_SITE_OMADA>'
+## Paramètres de configuration (`config.json`)
+
+La configuration de l'application se fait désormais dans le fichier `config.json` à la racine du projet.
+
+Exemple de contenu :
+
+```json
+{
+  "omada": {
+    "baseUrl": "https://<IP_DU_CONTROLEUR>:8043",
+    "client_id": "<VOTRE_CLIENT_ID>",
+    "client_secret": "<VOTRE_CLIENT_SECRET>",
+    "omadac_id": "<VOTRE_OMADAC_ID>",
+    "site": "<NOM_DU_SITE_OMADA>"
   },
-  mqtt: {
-    url: 'mqtt://<IP_DU_BROKER>',
-    username: '<UTILISATEUR_MQTT>',
-    password: '<MOT_DE_PASSE_MQTT>',
-    baseTopic: 'omada2mqtt'
+  "mqtt": {
+    "url": "mqtt://<IP_DU_BROKER>",
+    "username": "<UTILISATEUR_MQTT>",
+    "password": "<MOT_DE_PASSE_MQTT>",
+    "baseTopic": "omada2mqtt"
   }
-};
+}
 ```
 
 **Détail des paramètres :**
