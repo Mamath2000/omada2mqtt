@@ -1,8 +1,8 @@
 
 
 const axios = require('axios');
-const config = require('./config');
-const { log, setLogLevel, LOG_LEVELS } = require('./logger');
+const config = require('./utils/config');
+const { log, setLogLevel, LOG_LEVELS } = require('./utils/logger');
 
 class omadaAuth {
     constructor() {

@@ -1,8 +1,14 @@
 const mqtt = require('mqtt');
-const config = require('./config');
+const config = require('./utils/config');
 const omadaAuth = require('./omadaAuth');
 const OmadaApi = require('./omadaApi');
-const { log } = require('./logger');
+const logger = require('./utils/logger');
+
+// Applique le niveau de log depuis la config
+if (config.logLevel) {
+  logger.setLogLevel && logger.setLogLevel(config.logLevel);
+}
+const log = logger.log || logger;
 
 async function main() {
   // Connexion à l'API Omada

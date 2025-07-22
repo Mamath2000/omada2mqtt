@@ -1,6 +1,6 @@
 // omadaApi.js : Classe d'accès aux données Omada (hors authentification)
-const config = require('./config');
-const { log } = require('./logger');
+const config = require('./utils/config');
+const { log } = require('./utils/logger');
 
 class OmadaApi {
     constructor(omadaAuth) {
