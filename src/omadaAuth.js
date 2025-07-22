@@ -2,15 +2,7 @@
 
 const axios = require('axios');
 const config = require('./config');
-const LOG_LEVELS = { debug: 0, info: 1, warn: 2, error: 3 };
-let CURRENT_LOG_LEVEL = LOG_LEVELS.info;
-
-function log(level, ...args) {
-    if (LOG_LEVELS[level] >= CURRENT_LOG_LEVEL) {
-        const prefix = `[${level.toUpperCase()}]`;
-        console.log(prefix, ...args);
-    }
-}
+const { log, setLogLevel, LOG_LEVELS } = require('./logger');
 
 class omadaAuth {
     constructor() {
@@ -26,9 +18,7 @@ class omadaAuth {
     }
 
     setLogLevel(level) {
-        if (LOG_LEVELS[level] !== undefined) {
-            CURRENT_LOG_LEVEL = LOG_LEVELS[level];
-        }
+        setLogLevel(level);
     }
 
     /**

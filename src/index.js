@@ -1,17 +1,19 @@
 const mqtt = require('mqtt');
 const config = require('./config');
 const omadaAuth = require('./omadaAuth');
+const omadaApi = require('./omadaApi');
+const { log } = require('./logger');
 
 async function main() {
   // Connexion à l'API Omada
   const loggedIn = await omadaAuth.login();
   if (!loggedIn) {
-    console.error("Impossible de démarrer l'application sans connexion à Omada. Vérifiez votre configuration.");
+    log('error', "Impossible de démarrer l'application sans connexion à Omada. Vérifiez votre configuration.");
     process.exit(1);
   }
 
   // Test du refresh token immédiatement après le login
-  console.log('[INFO] Test du renouvellement du token...');
+  log('info', 'Test du renouvellement du token...');
   await omadaAuth.doRefreshToken();
 
   // Connexion au broker MQTT
@@ -20,25 +22,31 @@ async function main() {
     password: config.mqtt.password
   });
 
-//   mqttClient.on('connect', () => {
-//     console.log('Connecté au broker MQTT');
-//     // Souscription au topic pour contrôler les ports des switchs
-//     const topic = `${config.mqtt.baseTopic}/switch/+/ports/+/set`;
-//     mqttClient.subscribe(topic, (err) => {
-//       if (!err) {
-//         console.log(`Souscription réussie au topic: ${topic}`);
-//       } else {
-//         console.error('Erreur de souscription:', err);
-//       }
-//     });
-//   });
+  mqttClient.on('connect', async () => {
+    log('info', 'Connecté au broker MQTT');
+    // Récupération et publication initiale des devices du site Omada
+    let deviceList = await omadaApi.publishAllDevices(omadaAuth, mqttClient);
+
+    // Mise à jour automatique toutes les minutes pour les devices
+    setInterval(async () => {
+      deviceList = await omadaApi.publishAllDevices(omadaAuth, mqttClient);
+    }, 60 * 1000);
+
+    // Publication des ports de switch toutes les 5 secondes
+    setInterval(() => {
+      // On filtre la liste pour ne garder que les switches valides
+      const switches = (deviceList || []).filter(d => d && d.type === 'switch').map(d => d.device);
+      omadaApi.publishSwitchPorts(omadaAuth, mqttClient, switches);
+    }, 5 * 1000);
+
+  });
 
   mqttClient.on('error', (err) => {
-    console.error('Erreur de connexion MQTT:', err);
+    log('error', 'Erreur de connexion MQTT:', err);
   });
 
   mqttClient.on('message', (topic, message) => {
-    console.log(`Message reçu sur le topic ${topic}: ${message.toString()}`);
+    log('info', `Message reçu sur le topic ${topic}: ${message.toString()}`);
     // Ici, nous allons ajouter la logique pour appeler l'API Omada
   });
 }
