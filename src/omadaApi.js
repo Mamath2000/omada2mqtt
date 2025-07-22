@@ -52,6 +52,9 @@ class OmadaApi {
     async #publishAllDevices() {
         if (!this.isSiteIdSet()) return;
 
+        const fs = require('fs');
+        const path = require('path');
+
         try {
             const url = `/openapi/v1/${config.omada.omadac_id}/sites/${this.siteId}/devices?pageSize=100&page=1`;
             const response = await this.omadaAuth.api.get(url);
@@ -81,14 +84,24 @@ class OmadaApi {
                         });
                     }
                 });
-                return Object.keys(this.devices).map(name => ({ name, ...this.devices[name] }));
+
+                // Sauvegarde debug si log level debug
+                if (process.env.DEBUG || config.logLevel === 'debug') {
+                    try {
+                        const debugDir = path.join(__dirname, '../debug');
+                        if (!fs.existsSync(debugDir)) fs.mkdirSync(debugDir, { recursive: true });
+                        const filePath = path.join(debugDir, `devices.json`);
+                        fs.writeFileSync(filePath, JSON.stringify(this.devices, null, 2), 'utf8');
+                    } catch (e) {
+                        log('warn', `Erreur lors de la sauvegarde debug des devices:`, e.message);
+                    }
+                }
+
             } else {
                 log('warn', 'Erreur lors de la récupération des devices, réponse inattendue:', response.data);
-                return [];
             }
         } catch (error) {
             log('error', 'Erreur lors de la récupération des devices Omada:', error.response ? error.response.data : error.message);
-            return [];
         }
     }
 
@@ -181,7 +194,7 @@ class OmadaApi {
                 if (overrideResp.data.errorCode === 0) {
                     log('info', `Override du profil activé pour port ${portNum} du switch ${switchName}`);
                     this.devices[switchName].ports[portNum].profileOverrideEnable = true;
-                    sleep(2000); // Attendre un peu pour que l'override soit pris en compte
+                    sleep(100); // Attendre un peu pour que l'override soit pris en compte
                 } else {
                     log('warn', `Erreur lors de l'activation de l'override du profil pour port ${portNum} (${switchName}):`, overrideResp.data);
                     return;

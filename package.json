@@ -20,6 +20,7 @@
   "homepage": "https://github.com/Mamath2000/omada2mqtt#readme",
   "dependencies": {
     "axios": "^1.10.0",
+    "ini": "^5.0.0",
     "mqtt": "^5.13.3"
   }
 }
