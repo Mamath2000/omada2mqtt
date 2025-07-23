@@ -20,28 +20,28 @@ Ce projet permet de faire le pont entre un contrôleur TP-Link Omada et un broke
    - Appel à `/openapi/v1/{omadac_id}/sites?pageSize=100&page=1` avec le header `Authorization: AccessToken=...`.
 
 
-## Paramètres de configuration (`config.json`)
+## Paramètres de configuration (`config.conf`)
 
-La configuration de l'application se fait désormais dans le fichier `config.json` à la racine du projet.
+La configuration de l'application se fait désormais dans le fichier `config.conf` à la racine du projet.
 
 Exemple de contenu :
 
-```json
-{
-  "omada": {
-    "baseUrl": "https://<IP_DU_CONTROLEUR>:8043",
-    "client_id": "<VOTRE_CLIENT_ID>",
-    "client_secret": "<VOTRE_CLIENT_SECRET>",
-    "omadac_id": "<VOTRE_OMADAC_ID>",
-    "site": "<NOM_DU_SITE_OMADA>"
-  },
-  "mqtt": {
-    "url": "mqtt://<IP_DU_BROKER>",
-    "username": "<UTILISATEUR_MQTT>",
-    "password": "<MOT_DE_PASSE_MQTT>",
-    "baseTopic": "omada2mqtt"
-  }
-}
+```ini
+[omada]
+baseUrl = https://<IP_DU_CONTROLEUR>:8043
+client_id = <VOTRE_CLIENT_ID>
+client_secret = <VOTRE_CLIENT_SECRET>
+omadac_id = <VOTRE_OMADAC_ID>
+site = <NOM_DU_SITE_OMADA>
+
+[mqtt]
+url = mqtt://<IP_DU_BROKER>
+username = <UTILISATEUR_MQTT>
+password = <MOT_DE_PASSE_MQTT>
+baseTopic = omada2mqtt
+
+[log]
+level = info # Log level: debug, info, warn, error
 ```
 
 **Détail des paramètres :**
@@ -61,29 +61,89 @@ Exemple de contenu :
 1. Le programme se connecte à Omada, récupère et renouvelle automatiquement le token.
 2. Il se connecte au broker MQTT et s'abonne aux topics nécessaires.
 3. Il publie les informations des devices et des ports PoE sur MQTT.
+4. Il configure automatiquement Home Assistant via MQTT Discovery.
+
+### Publication des informations devices
+
+Pour chaque device détecté (switch, AP, gateway), le programme publie :
+
+- **Topic principal** : `<baseTopic>/<type>/<nom_device>`
+- **Payload** : Objet JSON complet avec toutes les informations du device
+- **Fréquence** : Toutes les 60 secondes
 
 ### Publication des ports PoE
 
-Pour chaque switch détecté, le programme publie l'état de chaque port PoE sur un topic dédié toutes les 5 secondes.
+Pour chaque switch détecté, le programme publie l'état de chaque port individuellement :
 
-- **Format du topic :**
-  
-  ```
-  <baseTopic>/switch/<nom_du_switch>/ports/port<numero>_poe_switch
-  ```
-  
-  Exemple :
-  
-  ```
-  omada/switch/switch1/ports/port5_poe_switch
-  ```
+- **Topics par port** :
+  - `<baseTopic>/switch/<nom_switch>/ports/port<numero>/name` : Nom du port
+  - `<baseTopic>/switch/<nom_switch>/ports/port<numero>/isPOE` : Si le port supporte PoE
+  - `<baseTopic>/switch/<nom_switch>/ports/port<numero>/profileName` : Nom du profil
+  - `<baseTopic>/switch/<nom_switch>/ports/port<numero>/profileOverrideEnable` : Override activé
+  - `<baseTopic>/switch/<nom_switch>/ports/port<numero>/poeState` : État PoE (1=on, 0=off)
 
-- **Payload :**
-  - `on` si le port PoE est activé
-  - `off` si le port PoE est désactivé
+- **Fréquence** : Toutes les 5 secondes
 
-Le nom du switch est normalisé (minuscules, espaces et tirets remplacés par `_`).
-Seuls les ports PoE sont publiés (filtrage possible selon le nom du switch).
+### Contrôle des ports PoE
+
+Le programme permet de contrôler l'état PoE des ports via MQTT :
+
+- **Topic de commande** : `<baseTopic>/switch/<nom_switch>/ports/port<numero>/poeState/set`
+- **Payload** : `1` (activer PoE) ou `0` (désactiver PoE)
+
+Exemple :
+```bash
+# Activer le PoE sur le port 5 du switch SG2008P
+mosquitto_pub -h <broker> -t "omada2mqtt/switch/sg2008p/ports/port5/poeState/set" -m "1"
+
+# Désactiver le PoE sur le port 5 du switch SG2008P  
+mosquitto_pub -h <broker> -t "omada2mqtt/switch/sg2008p/ports/port5/poeState/set" -m "0"
+```
+
+### Intégration Home Assistant
+
+Le programme configure automatiquement Home Assistant via MQTT Discovery :
+
+**Pour chaque device** :
+- Sensors : Type, IP, Uptime, CPU, Mémoire, Nom, MAC
+- Binary sensor : État (on/off)
+- Device grouping avec informations complètes
+
+**Pour chaque port PoE** :
+- Switch entity avec contrôle on/off
+- Device class : `outlet`
+- Commandes bidirectionnelles (lecture + écriture)
+
+Les entities apparaissent automatiquement dans Home Assistant sous **Paramètres → Appareils et services → MQTT**.
+
+## Structure des topics MQTT
+
+### Topics de publication (automatiques)
+
+```
+<baseTopic>/<type_device>/<nom_device>                                    # Données complètes du device
+<baseTopic>/switch/<nom_switch>/ports/port<X>/name                        # Nom du port
+<baseTopic>/switch/<nom_switch>/ports/port<X>/isPOE                       # Support PoE (true/false)
+<baseTopic>/switch/<nom_switch>/ports/port<X>/profileName                 # Nom du profil
+<baseTopic>/switch/<nom_switch>/ports/port<X>/profileOverrideEnable       # Override activé (true/false)
+<baseTopic>/switch/<nom_switch>/ports/port<X>/poeState                    # État PoE (1/0)
+```
+
+### Topics de commande (pour contrôle)
+
+```
+<baseTopic>/switch/<nom_switch>/ports/port<X>/poeState/set                # Contrôle PoE (payload: 1 ou 0)
+```
+
+### Topics Home Assistant Discovery (automatiques)
+
+```
+homeassistant/sensor/<device_id>/<sensor_key>/config                      # Configuration sensors
+homeassistant/binary_sensor/<device_id>/<sensor_key>/config               # Configuration binary sensors  
+homeassistant/switch/<device_id>/port<X>/config                           # Configuration switches PoE
+```
+
+**Note** : `<nom_device>` et `<nom_switch>` sont normalisés (minuscules, espaces et tirets remplacés par `_`).
 
 ## Lancement
 

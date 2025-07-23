@@ -19,6 +19,16 @@ try {
   if (config.mqtt) {
       config.mqtt.baseTopic = config.mqtt.baseTopic || config.mqtt.baseTopic;
   }
+  
+  // Validation des paramètres essentiels
+  if (!config.omada || !config.omada.baseUrl || !config.omada.client_id) {
+    console.error('Configuration Omada incomplète. Vérifiez votre fichier config.conf');
+    process.exit(1);
+  }
+  if (!config.mqtt || !config.mqtt.url) {
+    console.error('Configuration MQTT incomplète. Vérifiez votre fichier config.conf');
+    process.exit(1);
+  }
 } catch (e) {
   console.error('Erreur de lecture du fichier de configuration config.conf:', e.message);
   process.exit(1);

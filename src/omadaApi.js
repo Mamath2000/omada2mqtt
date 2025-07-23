@@ -149,7 +149,7 @@ class OmadaApi {
                             isPOE: isPoeSwitch,
                             profileName: element.profileName,
                             profileOverrideEnable: element.profileOverrideEnable,
-                            poeState: element.poeMode === 1 ? 'on' : 'off',
+                            poeState: element.poeMode,
                         };
                         this.devices[identifier].ports[portNum] = publishData;
                         if (this.mqttClient) {
@@ -178,7 +178,7 @@ class OmadaApi {
      * Applique une commande on/off sur un port PoE d'un switch Omada
      * @param {string} switchName - Nom normalisé du switch (identifiant MQTT)
      * @param {number|string} portNum - Numéro du port à contrôler
-     * @param {string} action - 'on' ou 'off'
+     * @param {string} action - 1 ou 0
      * @returns {Promise<void>}
      */
     async setSwitchPortPoe(switchName, portNum, action) {
@@ -192,7 +192,6 @@ class OmadaApi {
 
         const switchDevice = this.devices[switchName].device;
         const switchMac = switchDevice.mac;
-        const poeMode = action === 'on' ? 1 : 0;
 
         // Vérifier l'état de profileOverrideEnable
         const portState = this.devices[switchName].ports[portNum];
@@ -203,7 +202,8 @@ class OmadaApi {
                 if (overrideResp.data.errorCode === 0) {
                     log('info', `Override du profil activé pour port ${portNum} du switch ${switchName}`);
                     this.devices[switchName].ports[portNum].profileOverrideEnable = true;
-                    sleep(100); // Attendre un peu pour que l'override soit pris en compte
+                    // Attendre un peu pour que l'override soit pris en compte
+                    await new Promise(resolve => setTimeout(resolve, 300));
                 } else {
                     log('warn', `Erreur lors de l'activation de l'override du profil pour port ${portNum} (${switchName}):`, overrideResp.data);
                     return;
@@ -217,7 +217,7 @@ class OmadaApi {
         // Mettre à jour le mode PoE
         const poeUrl = `/openapi/v1/${config.omada.omadac_id}/sites/${this.siteId}/switches/${switchMac}/ports/${portNum}/poe-mode`;
         try {
-            const poeResp = await this.omadaAuth.api.put(poeUrl, { poeMode: poeMode });
+            const poeResp = await this.omadaAuth.api.put(poeUrl, { poeMode: action });
             if (poeResp.data.errorCode === 0) {
                 log('info', `PoE du port ${portNum} du switch ${switchName} mis à jour: ${action}`);
                 this.devices[switchName].ports[portNum].poeState = action;

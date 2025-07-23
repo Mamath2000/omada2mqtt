@@ -19,9 +19,6 @@ async function main() {
     process.exit(1);
   }
 
-  // Test du refresh token immédiatement après le login
-    log('info', 'Test du renouvellement du token...');
-
   // Instanciation de l'API orientée objet
   const omadaApi = new OmadaApi(omadaAuth);
 
@@ -34,17 +31,28 @@ async function main() {
     log('info', 'Connecté au broker MQTT');
     omadaApi.setMqttClient(mqttClient);
 
+    // Fonction pour publier la découverte HA
+    const publishHADiscoveryData = async () => {
+      if (!devices || Object.keys(devices).length === 0) {
+        const devices = await omadaApi.refreshDevicesAndPorts();
+        if (devices && Object.keys(devices).length > 0) {
+          log('info', 'Publication de la configuration Home Assistant MQTT Discovery');
+          haDiscovery.publishHADiscovery(mqttClient, devices);
+        } else {
+          log('warn', 'Aucun device trouvé pour la publication Home Assistant.');
+        }
+      }
+    };
+
+    // Publication immédiate de la découverte HA en premier
+    await publishHADiscoveryData();
+
+    // Publication de la découverte HA tous les jours (24h = 86400000 ms)
+    setInterval(publishHADiscoveryData, 24 * 60 * 60 * 1000);
+    log('info', 'Publication Home Assistant programmée toutes les 24 heures');
+
     // Démarrage du polling automatique (devices et ports)
     await omadaApi.startPolling(60, 5);
-
-    // Rafraîchit immédiatement la liste des devices et ports pour Home Assistant
-    const devices = await omadaApi.refreshDevicesAndPorts();
-    if (devices && Object.keys(devices).length > 0) {
-      log('info', 'Publication de la configuration Home Assistant MQTT Discovery');
-      haDiscovery.publishHADiscovery(mqttClient, devices);
-    } else {
-      log('warn', 'Aucun device trouvé pour la publication Home Assistant.');
-    }
 
     // Souscription aux commandes PoE
     mqttClient.subscribe(`${config.mqtt.baseTopic}/switch/+/ports/+/poeState/set`, (err) => {
@@ -68,8 +76,8 @@ async function main() {
     if (match) {
       const switchName = match[1];
       const portNum = match[2];
-      const action = message.toString().trim().toLowerCase();
-      if (action === 'on' || action === 'off') {
+      const action = parseInt(message.toString());
+      if (action === 1 || action === 0) {
         omadaApi.setSwitchPortPoe(switchName, portNum, action);
       } else {
         log('warn', `Commande PoE inconnue : ${action} (topic: ${topic})`);
