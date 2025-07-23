@@ -54,7 +54,7 @@ function publishHADiscovery(mqttClient, devices) {
             const payload = {
                 state_topic: topic,
                 unique_id: `${baseId}_${sensor.key}`,
-                objectId: objectId,
+                object_id: objectId,
                 device: haDevice,
                 name: `${sensor.name}`,
                 has_entity_name: true,
@@ -88,7 +88,7 @@ function publishHADiscovery(mqttClient, devices) {
             if (entry.ports) {
                 Object.entries(entry.ports).forEach(([portNum, port]) => {
                     if (port.isPOE) {
-
+                        // sg2008p_port2_poe_switch
                         const objectId = `${entityId}_port${portNum}`;
                         const stateTopic = `${baseTopic}/switch/${name}/ports/port${portNum}/poeState`;
                         const commandTopic = `${baseTopic}/switch/${name}/ports/port${portNum}/poeState/set`;
@@ -98,7 +98,7 @@ function publishHADiscovery(mqttClient, devices) {
                             state_topic: stateTopic,
                             command_topic: commandTopic,
                             unique_id: `${baseId}_port${portNum}`,
-                            objectId: objectId,
+                            object_id: objectId,
                             device_class: 'outlet',
                             value_template: '{{ value }}',
                             has_entity_name: true,
