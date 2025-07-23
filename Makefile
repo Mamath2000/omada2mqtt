@@ -14,6 +14,16 @@ all: help
 # Install dependencies
 install:
 	@echo "Installing dependencies..."
+	@# Check if node is installed
+	@which node > /dev/null || (echo "Error: Node.js is not installed. Please install Node.js first." && exit 1)
+	@# Check if npm is installed
+	@which npm > /dev/null || (echo "Error: npm is not installed. Please install npm first." && exit 1)
+	@# Check Node.js version (require v16+)
+	@node_version=$$(node --version | cut -d'.' -f1 | sed 's/v//'); \
+	if [ "$$node_version" -lt 16 ]; then \
+		echo "Error: Node.js version 16 or higher is required. Current version: $$(node --version)"; \
+		exit 1; \
+	fi
 	npm install
 
 # Run the application (development)

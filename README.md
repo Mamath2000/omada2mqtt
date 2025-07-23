@@ -182,11 +182,52 @@ homeassistant/switch/<device_id>/port<X>/config                           # Conf
 
 ## Installation et lancement
 
+### Prérequis
+
+Avant d'installer omada2mqtt, assurez-vous d'avoir les prérequis suivants :
+
+**Node.js et npm** (version 16 ou supérieure) :
+
+```bash
+# Ubuntu/Debian
+sudo apt update
+sudo apt install nodejs npm
+
+# CentOS/RHEL/Fedora
+sudo dnf install nodejs npm
+# ou pour les versions plus anciennes
+sudo yum install nodejs npm
+
+# Vérifier les versions installées
+node --version
+npm --version
+```
+
+**Git** (pour cloner le repository) :
+```bash
+# Ubuntu/Debian
+sudo apt install git
+
+# CentOS/RHEL/Fedora
+sudo dnf install git
+```
+
 ### Mode développement
 
 ```bash
-make install   # Installe les dépendances
-make run       # Démarre l'application
+# 1. Cloner le repository
+git clone https://github.com/Mamath2000/omada2mqtt.git
+cd omada2mqtt
+
+# 2. Installer les dépendances
+make install
+
+# 3. Configurer l'application
+cp config-sample.conf config.conf
+# Éditer config.conf avec vos paramètres
+
+# 4. Démarrer l'application
+make run
 ```
 
 ### Installation en tant que service système
@@ -194,17 +235,23 @@ make run       # Démarre l'application
 Pour une installation en production, vous pouvez installer omada2mqtt comme service systemd :
 
 ```bash
-# 1. Configurer l'application
+# 1. S'assurer que les prérequis sont installés (voir section Prérequis)
+
+# 2. Cloner le repository
+git clone https://github.com/Mamath2000/omada2mqtt.git
+cd omada2mqtt
+
+# 3. Configurer l'application
 cp config-sample.conf config.conf
 # Éditer config.conf avec vos paramètres
 
-# 2. Installer le service (nécessite sudo)
+# 4. Installer le service (nécessite sudo)
 sudo make install-service
 
-# 3. Démarrer le service
+# 5. Démarrer le service
 sudo make start
 
-# 4. Vérifier le statut
+# 6. Vérifier le statut
 make status
 ```
 
