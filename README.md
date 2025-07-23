@@ -145,12 +145,55 @@ homeassistant/switch/<device_id>/port<X>/config                           # Conf
 
 **Note** : `<nom_device>` et `<nom_switch>` sont normalisés (minuscules, espaces et tirets remplacés par `_`).
 
-## Lancement
+## Installation et lancement
+
+### Mode développement
 
 ```bash
 make install   # Installe les dépendances
 make run       # Démarre l'application
 ```
+
+### Installation en tant que service système
+
+Pour une installation en production, vous pouvez installer omada2mqtt comme service systemd :
+
+```bash
+# 1. Configurer l'application
+cp config-sample.conf config.conf
+# Éditer config.conf avec vos paramètres
+
+# 2. Installer le service (nécessite sudo)
+sudo make install-service
+
+# 3. Démarrer le service
+sudo make start
+
+# 4. Vérifier le statut
+make status
+```
+
+### Gestion du service
+
+```bash
+# Démarrage/Arrêt
+sudo make start          # Démarrer le service
+sudo make stop           # Arrêter le service
+sudo make restart        # Redémarrer le service
+
+# Configuration au démarrage
+sudo make enable         # Démarrer automatiquement au boot
+sudo make disable        # Ne pas démarrer au boot
+
+# Monitoring
+make status              # Statut du service
+make logs                # Logs en temps réel
+
+# Désinstallation
+sudo make uninstall-service  # Supprimer complètement le service
+```
+
+**Note** : Le service s'installe dans `/opt/omada2mqtt` et utilise l'utilisateur actuel pour l'exécution.
 
 ## Dépendances principales
 

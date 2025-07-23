@@ -1,0 +1,18 @@
+[Unit]
+Description=Omada2MQTT Bridge
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User={{SERVICE_USER}}
+WorkingDirectory={{INSTALL_DIR}}
+ExecStart=/usr/bin/node src/index.js
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=omada2mqtt
+
+[Install]
+WantedBy=multi-user.target
