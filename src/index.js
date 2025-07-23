@@ -33,6 +33,7 @@ async function main() {
 
     // Fonction pour publier la découverte HA
     const publishHADiscoveryData = async () => {
+      const devices = omadaApi.getDevices();
       if (!devices || Object.keys(devices).length === 0) {
         const devices = await omadaApi.refreshDevicesAndPorts();
         if (devices && Object.keys(devices).length > 0) {
