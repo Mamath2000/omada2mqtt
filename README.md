@@ -1,9 +1,44 @@
 
 # omada2mqtt
 
-## Présentation
+## Introduction
 
-Ce projet permet de faire le pont entre un contrôleur TP-Link Omada et un broker MQTT. Il gère l'authentification OAuth2, le renouvellement automatique du token, et expose les informations Omada sur MQTT.
+### Qu'est-ce qu'Omada ?
+
+**Omada** est la solution de réseau professionnel de **TP-Link** qui permet de gérer de manière centralisée l'ensemble de votre infrastructure réseau. Elle comprend :
+
+- **Contrôleur Omada** : Logiciel de gestion centralisée (hardware ou software)
+- **Points d'accès WiFi** : Gamme EAP (EAP225, EAP615, etc.)
+- **Switchs managés** : Gamme TL-SG et SG avec support PoE
+- **Routeurs/Gateway** : Gamme ER pour la connectivité WAN
+
+L'écosystème Omada offre une gestion unifiée via une interface web intuitive, permettant de surveiller, configurer et contrôler tous les équipements réseau depuis un point central.
+
+### But de ce programme
+
+**omada2mqtt** est un pont logiciel qui expose les informations et contrôles de votre réseau Omada vers **Home Assistant** via un broker **MQTT**.
+
+**Fonctionnalités principales :**
+
+🔍 **Monitoring en temps réel** :
+- État de tous les devices (switchs, points d'accès, routeurs)
+- Métriques système (CPU, mémoire, uptime)
+- Connectivité et informations réseau
+
+🔌 **Contrôle des ports PoE** :
+- Activation/désactivation à distance des ports PoE des switchs
+- Intégration complète dans Home Assistant
+- Automatisation possible via les scénarios HA
+
+🏠 **Intégration Home Assistant** :
+- Auto-discovery automatique de tous les devices
+- Création d'entités sensors et switches
+- Tableaux de bord personnalisables
+- Alertes et notifications
+
+## Présentation technique
+
+Ce projet implémente un pont de communication entre l'API REST du contrôleur TP-Link Omada et un broker MQTT. Il gère l'authentification OAuth2, le renouvellement automatique des tokens, et expose de manière structurée toutes les informations du réseau.
 
 ## Processus de connexion Omada
 
