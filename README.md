@@ -274,10 +274,36 @@ make status              # Statut du service
 make logs                # Logs en temps réel
 
 # Désinstallation
-sudo make uninstall-service  # Supprimer complètement le service
+sudo make uninstall-service  # Supprimer le service du site actuel
+sudo make uninstall-all      # Supprimer TOUS les services omada2mqtt
 ```
 
-**Note** : Le service s'installe dans `/opt/omada2mqtt` et utilise l'utilisateur actuel pour l'exécution.
+### Gestion multi-sites
+
+Vous pouvez installer plusieurs instances pour différents sites Omada :
+
+```bash
+# Site 1 : Bureau
+cd /home/user/omada2mqtt-bureau
+cp config-sample.conf config.conf
+# Éditer config.conf avec site = Bureau
+sudo make install-service  # Crée le service omada2mqtt_bureau
+
+# Site 2 : Maison
+cd /home/user/omada2mqtt-maison  
+cp config-sample.conf config.conf
+# Éditer config.conf avec site = Maison
+sudo make install-service  # Crée le service omada2mqtt_maison
+
+# Lister tous les services
+make list-services
+
+# Gérer individuellement
+sudo systemctl start omada2mqtt_bureau
+sudo systemctl start omada2mqtt_maison
+```
+
+**Note** : Chaque service s'installe dans son propre répertoire (`/opt/omada2mqtt_<sitename>/`) et utilise un nom unique basé sur le site configuré.
 
 ## Dépendances principales
 
