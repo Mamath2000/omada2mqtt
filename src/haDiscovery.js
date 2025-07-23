@@ -48,13 +48,13 @@ function publishHADiscovery(mqttClient, devices) {
             { key: 'mac', name: 'MAC', domain: 'sensor', value_template: '{{ value_json.mac }}' },
         ];
         sensors.forEach(sensor => {
-            const objectId = `${entityId}_${sensor.key}`;
+            // const objectId = `${entityId}_${sensor.key}`;
             const topic = `${baseTopic}/${device.type}/${name}`;
             const configTopic = `homeassistant/${sensor.domain}/${baseId}/${sensor.key}/config`;
             const payload = {
                 state_topic: topic,
                 unique_id: `${baseId}_${sensor.key}`,
-                object_id: objectId,
+                object_id: `${baseId}_${sensor.key}`,
                 device: haDevice,
                 name: `${sensor.name}`,
                 has_entity_name: true,
@@ -98,7 +98,7 @@ function publishHADiscovery(mqttClient, devices) {
                             state_topic: stateTopic,
                             command_topic: commandTopic,
                             unique_id: `${baseId}_port${portNum}`,
-                            object_id: objectId,
+                            object_id: `${baseId}_port${portNum}`,
                             device_class: 'outlet',
                             value_template: '{{ value }}',
                             has_entity_name: true,
