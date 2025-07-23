@@ -40,7 +40,7 @@ function publishHADiscovery(mqttClient, devices) {
             { key: 'type', name: 'Type', domain: 'sensor', value_template: '{{ value_json.type }}' },
             { key: 'ip', name: 'Adresse Ip', domain: 'sensor', value_template: '{{ value_json.ip }}' },
             { key: 'uptime', name: 'Uptime', domain: 'sensor', value_template: '{{ value_json.uptime }}' },
-            { key: 'status', name: 'Etat', domain: 'binary_sensor', device_class: 'running', value_template: '{{ "on" if (value_json.status|int==1) else "off" }}' },
+            { key: 'status', name: 'Etat', domain: 'binary_sensor', device_class: 'running', value_template: '{{ value_json.status|int }}' },
             { key: 'last_seen', name: 'Dernière Détection', domain: 'sensor', device_class: 'timestamp', value_template: '{{ as_datetime(value_json.lastSeen /1000) }}' },
             { key: 'cpuUtil', name: 'CPU', domain: 'sensor', value_template: '{{ value_json.cpuUtil }}', "unit_of_measurement": "%" },
             { key: 'memUtil', name: 'Mémoire', domain: 'sensor', value_template: '{{ value_json.memUtil }}', "unit_of_measurement": "%" },
