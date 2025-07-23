@@ -1,12 +1,17 @@
 # Makefile for omada2mqtt
 
 # Variables
-SERVICE_NAME = omada2mqtt
+SERVICE_NAME_BASE = omada2mqtt
 SERVICE_USER = $(shell whoami)
-INSTALL_DIR = /opt/omada2mqtt
+INSTALL_DIR_BASE = /opt/omada2mqtt
 CURRENT_DIR = $(shell pwd)
 
-.PHONY: all install run clean help install-service uninstall-service start stop restart status enable disable logs
+# Extract site name from config.conf to create unique service name
+SITE_NAME = $(shell if [ -f config.conf ]; then grep "^site" config.conf | cut -d'=' -f2 | tr -d ' ' | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g'; else echo "default"; fi)
+SERVICE_NAME = $(SERVICE_NAME_BASE)_$(SITE_NAME)
+INSTALL_DIR = $(INSTALL_DIR_BASE)_$(SITE_NAME)
+
+.PHONY: all install run clean help install-service uninstall-service start stop restart status enable disable logs list-services uninstall-all
 
 # Default target
 all: help
@@ -43,6 +48,15 @@ install-service: install
 		echo "Error: This command must be run as root (use sudo)"; \
 		exit 1; \
 	fi
+	@# Check if config.conf exists
+	@if [ ! -f config.conf ]; then \
+		echo "Error: config.conf not found. Please copy and configure config-sample.conf first."; \
+		echo "Run: cp config-sample.conf config.conf"; \
+		exit 1; \
+	fi
+	@echo "Detected site: $(SITE_NAME)"
+	@echo "Service name will be: $(SERVICE_NAME)"
+	@echo "Installation directory: $(INSTALL_DIR)"
 	@# Create installation directory
 	mkdir -p $(INSTALL_DIR)
 	@# Copy application files
@@ -122,6 +136,37 @@ logs:
 	@echo "Showing omada2mqtt service logs..."
 	journalctl -u $(SERVICE_NAME) -f
 
+# List all omada2mqtt services
+list-services:
+	@echo "Listing all omada2mqtt services..."
+	@systemctl list-units --type=service | grep omada2mqtt || echo "No omada2mqtt services found"
+	@echo ""
+	@echo "Installation directories:"
+	@ls -la /opt/ | grep omada2mqtt || echo "No installation directories found"
+
+# Uninstall all omada2mqtt services
+uninstall-all:
+	@echo "Uninstalling ALL omada2mqtt services..."
+	@if [ "$(shell id -u)" != "0" ]; then \
+		echo "Error: This command must be run as root (use sudo)"; \
+		exit 1; \
+	fi
+	@# Stop and disable all omada2mqtt services
+	@for service in $$(systemctl list-units --type=service | grep omada2mqtt | awk '{print $$1}'); do \
+		echo "Stopping and disabling $$service"; \
+		systemctl stop $$service; \
+		systemctl disable $$service; \
+		rm -f /etc/systemd/system/$$service; \
+	done
+	@# Remove all installation directories
+	@for dir in $$(ls -d /opt/omada2mqtt* 2>/dev/null || true); do \
+		echo "Removing $$dir"; \
+		rm -rf $$dir; \
+	done
+	@# Reload systemd
+	systemctl daemon-reload
+	@echo "All omada2mqtt services uninstalled successfully!"
+
 # Help
 help:
 	@echo "Available commands:"
@@ -131,9 +176,10 @@ help:
 	@echo "  make run              - Run the application (default)"
 	@echo "  make clean            - Remove installed dependencies"
 	@echo ""
-	@echo "System Service (requires sudo):"
-	@echo "  sudo make install-service    - Install as system service"
-	@echo "  sudo make uninstall-service  - Uninstall system service"
+	@echo "System Service (requires sudo and config.conf):"
+	@echo "  sudo make install-service    - Install as system service (site-specific)"
+	@echo "  sudo make uninstall-service  - Uninstall current site service"
+	@echo "  sudo make uninstall-all      - Uninstall ALL omada2mqtt services"
 	@echo ""
 	@echo "Service Management:"
 	@echo "  sudo make start       - Start the service"
@@ -143,5 +189,7 @@ help:
 	@echo "  sudo make enable      - Enable service at boot"
 	@echo "  sudo make disable     - Disable service at boot"
 	@echo "  make logs             - Show service logs (live)"
+	@echo "  make list-services    - List all omada2mqtt services"
 	@echo ""
+	@echo "Note: Service name will be 'omada2mqtt_<sitename>' based on config.conf"
 	@echo "  make help             - Show this help message"

@@ -232,7 +232,7 @@ make run
 
 ### Installation en tant que service système
 
-Pour une installation en production, vous pouvez installer omada2mqtt comme service systemd :
+Pour une installation en production, vous pouvez installer omada2mqtt comme service systemd. **Le nom du service sera automatiquement basé sur le site configuré**, permettant d'installer plusieurs instances pour différents sites :
 
 ```bash
 # 1. S'assurer que les prérequis sont installés (voir section Prérequis)
@@ -243,7 +243,7 @@ cd omada2mqtt
 
 # 3. Configurer l'application
 cp config-sample.conf config.conf
-# Éditer config.conf avec vos paramètres
+# Éditer config.conf avec vos paramètres (notamment le site)
 
 # 4. Installer le service (nécessite sudo)
 sudo make install-service
@@ -254,6 +254,8 @@ sudo make start
 # 6. Vérifier le statut
 make status
 ```
+
+**Exemple** : Si votre site s'appelle "Maison", le service sera nommé `omada2mqtt_maison` et installé dans `/opt/omada2mqtt_maison/`.
 
 ### Gestion du service
 
