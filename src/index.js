@@ -58,8 +58,6 @@ async function main() {
     if (config.homeassistant && config.homeassistant.enabled) {
       setInterval(publishHADiscoveryData, 24 * 60 * 60 * 1000);
       log('info', 'Publication Home Assistant programmée toutes les 24 heures');
-    } else {
-      log('info', 'Home Assistant MQTT Discovery désactivée - aucune publication programmée');
     }
 
     // Démarrage du polling automatique (devices et ports)
