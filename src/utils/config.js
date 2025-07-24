@@ -20,6 +20,17 @@ try {
       config.mqtt.baseTopic = config.mqtt.baseTopic || config.mqtt.baseTopic;
   }
   
+  // Gestion de la configuration Home Assistant avec valeur par défaut
+  if (!config.homeassistant) {
+      config.homeassistant = {};
+  }
+  // Conversion de la chaîne en booléen avec valeur par défaut à true
+  if (config.homeassistant.enabled === undefined) {
+      config.homeassistant.enabled = true;
+  } else if (typeof config.homeassistant.enabled === 'string') {
+      config.homeassistant.enabled = config.homeassistant.enabled.toLowerCase() === 'true';
+  }
+  
   // Validation des paramètres essentiels
   if (!config.omada || !config.omada.baseUrl || !config.omada.client_id) {
     console.error('Configuration Omada incomplète. Vérifiez votre fichier config.conf');

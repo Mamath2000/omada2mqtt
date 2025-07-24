@@ -33,6 +33,12 @@ async function main() {
 
     // Fonction pour publier la découverte HA
     const publishHADiscoveryData = async () => {
+      // Vérifier si l'autodiscovery Home Assistant est activée
+      if (!config.homeassistant || !config.homeassistant.enabled) {
+        log('debug', 'Home Assistant MQTT Discovery désactivée dans la configuration');
+        return;
+      }
+      
       const devices = omadaApi.getDevices();
       if (!devices || Object.keys(devices).length === 0) {
         const devices = await omadaApi.refreshDevicesAndPorts();
@@ -48,9 +54,13 @@ async function main() {
     // Publication immédiate de la découverte HA en premier
     await publishHADiscoveryData();
 
-    // Publication de la découverte HA tous les jours (24h = 86400000 ms)
-    setInterval(publishHADiscoveryData, 24 * 60 * 60 * 1000);
-    log('info', 'Publication Home Assistant programmée toutes les 24 heures');
+    // Publication de la découverte HA tous les jours (24h = 86400000 ms) - seulement si activée
+    if (config.homeassistant && config.homeassistant.enabled) {
+      setInterval(publishHADiscoveryData, 24 * 60 * 60 * 1000);
+      log('info', 'Publication Home Assistant programmée toutes les 24 heures');
+    } else {
+      log('info', 'Home Assistant MQTT Discovery désactivée - aucune publication programmée');
+    }
 
     // Démarrage du polling automatique (devices et ports)
     await omadaApi.startPolling(60, 5);
