@@ -11,7 +11,13 @@ SITE_NAME = $(shell if [ -f config.conf ]; then grep "^site" config.conf | cut -
 SERVICE_NAME = $(SERVICE_NAME_BASE)_$(SITE_NAME)
 INSTALL_DIR = $(INSTALL_DIR_BASE)_$(SITE_NAME)
 
-.PHONY: all install run clean help install-service uninstall-service start stop restart status enable disable logs list-services uninstall-all
+# Docker variables
+DOCKER_IMAGE_NAME = omada2mqtt
+DOCKER_TAG ?= latest
+DOCKER_REGISTRY ?= mathmath350
+DOCKER_FULL_NAME = $(if $(DOCKER_REGISTRY),$(DOCKER_REGISTRY)/,)$(DOCKER_IMAGE_NAME):$(DOCKER_TAG)
+
+.PHONY: all install run clean help install-service uninstall-service start stop restart status enable disable logs list-services uninstall-all docker-build docker-run docker-stop docker-clean docker-push docker-pull docker-compose-up docker-compose-down
 
 # Default target
 all: help
@@ -40,6 +46,87 @@ run:
 clean:
 	@echo "Cleaning up..."
 	rm -rf node_modules
+
+# =============================================================================
+# Docker targets
+# =============================================================================
+
+# Build Docker image
+docker-build:
+	@echo "Building Docker image: $(DOCKER_FULL_NAME)"
+	@# Check if Docker is installed
+	@which docker > /dev/null || (echo "Error: Docker is not installed. Please install Docker first." && exit 1)
+	docker build -t $(DOCKER_FULL_NAME) .
+	@echo "Docker image built successfully: $(DOCKER_FULL_NAME)"
+
+# Run Docker container
+docker-run:
+	@echo "Running Docker container..."
+	@if [ ! -f config.conf ]; then \
+		echo "Error: config.conf not found. Please copy and configure config-sample.conf first."; \
+		echo "Run: cp config-sample.conf config.conf"; \
+		exit 1; \
+	fi
+	@# Stop existing container if running
+	-docker stop $(DOCKER_IMAGE_NAME) 2>/dev/null
+	-docker rm $(DOCKER_IMAGE_NAME) 2>/dev/null
+	@# Run new container
+	docker run -d \
+		--name $(DOCKER_IMAGE_NAME) \
+		--restart unless-stopped \
+		-v $(CURRENT_DIR)/config.conf:/app/config/config.conf:ro \
+		$(DOCKER_FULL_NAME)
+	@echo "Docker container started: $(DOCKER_IMAGE_NAME)"
+
+# Stop Docker container
+docker-stop:
+	@echo "Stopping Docker container..."
+	-docker stop $(DOCKER_IMAGE_NAME)
+	-docker rm $(DOCKER_IMAGE_NAME)
+	@echo "Docker container stopped and removed"
+
+# Clean Docker images and containers
+docker-clean:
+	@echo "Cleaning Docker images and containers..."
+	-docker stop $(DOCKER_IMAGE_NAME) 2>/dev/null
+	-docker rm $(DOCKER_IMAGE_NAME) 2>/dev/null
+	-docker rmi $(DOCKER_FULL_NAME) 2>/dev/null
+	@# Clean dangling images
+	-docker image prune -f
+	@echo "Docker cleanup completed"
+
+# Push Docker image to registry
+docker-push:
+	@echo "Pushing Docker image: $(DOCKER_FULL_NAME)"
+	docker push $(DOCKER_FULL_NAME)
+	@echo "Docker image pushed successfully"
+
+# Pull Docker image from registry
+docker-pull:
+	@echo "Pulling Docker image: $(DOCKER_FULL_NAME)"
+	docker pull $(DOCKER_FULL_NAME)
+	@echo "Docker image pulled successfully"
+
+# Start with docker-compose
+docker-compose-up:
+	@echo "Starting with docker-compose..."
+	@if [ ! -f docker-compose.yml ]; then \
+		echo "Error: docker-compose.yml not found."; \
+		exit 1; \
+	fi
+	@if [ ! -f config.conf ]; then \
+		echo "Error: config.conf not found. Please copy and configure config-sample.conf first."; \
+		echo "Run: cp config-sample.conf config.conf"; \
+		exit 1; \
+	fi
+	docker-compose up -d
+	@echo "Services started with docker-compose"
+
+# Stop docker-compose services
+docker-compose-down:
+	@echo "Stopping docker-compose services..."
+	-docker-compose down
+	@echo "Docker-compose services stopped"
 
 # Install application as system service
 install-service: install
@@ -176,6 +263,18 @@ help:
 	@echo "  make run              - Run the application (default)"
 	@echo "  make clean            - Remove installed dependencies"
 	@echo ""
+	@echo "Docker:"
+	@echo "  make docker-build     - Build Docker image"
+	@echo "  make docker-run       - Run Docker container (requires config.conf)"
+	@echo "  make docker-stop      - Stop and remove Docker container"
+	@echo "  make docker-clean     - Clean Docker images and containers"
+	@echo "  make docker-push      - Push image to registry (set DOCKER_REGISTRY=...)"
+	@echo "  make docker-pull      - Pull image from registry (set DOCKER_REGISTRY=...)"
+	@echo ""
+	@echo "Docker Compose:"
+	@echo "  make docker-compose-up   - Start services with docker-compose"
+	@echo "  make docker-compose-down - Stop docker-compose services"
+	@echo ""
 	@echo "System Service (requires sudo and config.conf):"
 	@echo "  sudo make install-service    - Install as system service (site-specific)"
 	@echo "  sudo make uninstall-service  - Uninstall current site service"
@@ -190,6 +289,11 @@ help:
 	@echo "  sudo make disable     - Disable service at boot"
 	@echo "  make logs             - Show service logs (live)"
 	@echo "  make list-services    - List all omada2mqtt services"
+	@echo ""
+	@echo "Docker Examples:"
+	@echo "  make docker-build DOCKER_TAG=v1.0.0"
+	@echo "  make docker-push DOCKER_TAG=latest                    # Push to mathmath350/omada2mqtt:latest"
+	@echo "  make docker-push DOCKER_REGISTRY=ghcr.io/mamath2000   # Push to custom registry"
 	@echo ""
 	@echo "Note: Service name will be 'omada2mqtt_<sitename>' based on config.conf"
 	@echo "  make help             - Show this help message"

@@ -3,11 +3,15 @@
 const path = require('path');
 const fs = require('fs');
 const ini = require('ini');
-const configPath = path.resolve(__dirname, '../../config.conf');
+
+// Utiliser la variable d'environnement CONFIG_FILE si définie, sinon le chemin par défaut
+const configPath = process.env.CONFIG_FILE || path.resolve(__dirname, '../../config.conf');
+
 let config = {};
 try {
   const iniContent = fs.readFileSync(configPath, 'utf8');
   config = ini.parse(iniContent);
+  console.log(`Configuration chargée depuis: ${configPath}`);
   // Conversion des types et adaptation pour compatibilité descendante
   if (config.log && config.log.level) {
       config.logLevel = config.log.level.replace(/#.*/, '').trim();

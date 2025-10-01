@@ -1,0 +1,21 @@
+services:
+  omada2mqtt:
+    # Utiliser l'image depuis Docker Hub
+    image: mathmath350/omada2mqtt:latest
+    container_name: omada2mqtt
+    restart: unless-stopped
+    
+    # Monter le fichier de configuration
+    volumes:
+      - ./config.conf:/app/config/config.conf:ro
+    
+    # Variables d'environnement
+    environment:
+      - NODE_ENV=production
+    
+    # Gestion des logs
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

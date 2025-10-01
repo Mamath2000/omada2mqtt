@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  omada2mqtt:
+    # Utiliser l'image depuis Docker Hub (recommandé)
+    image: mathmath350/omada2mqtt:latest
+    
+    # Alternative: construire localement
+    # build: .
+    
+    container_name: omada2mqtt
+    restart: unless-stopped
+    
+    # Monter le fichier de configuration depuis l'hôte
+    volumes:
+      # IMPORTANT: Créez d'abord votre config.conf depuis config-sample.conf
+      - ./config.conf:/app/config/config.conf:ro
+      
+      # Optionnel: monter un répertoire de logs si l'application en génère
+      # - ./logs:/app/logs
+    
+    # Variables d'environnement
+    environment:
+      - NODE_ENV=production
+      - CONFIG_FILE=/app/config/config.conf
+      # Optionnel: définir le niveau de log
+      # - LOG_LEVEL=info
+    
+    # Limite des ressources (ajustez selon vos besoins)
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    
+    # Healthcheck pour vérifier que l'application fonctionne
+    healthcheck:
+      test: ["CMD", "node", "-e", "process.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Configuration des logs avec rotation
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Réseau (utilisez le réseau par défaut ou créez-en un personnalisé)
+    # networks:
+    #   - omada-network
+
+# Exemple de réseau personnalisé (optionnel)
+# networks:
+#   omada-network:
+#     driver: bridge
+#     ipam:
+#       config:
+#         - subnet: 172.20.0.0/16
+
+# Exemple de volumes nommés (optionnel)
+# volumes:
+#   omada2mqtt-logs:
