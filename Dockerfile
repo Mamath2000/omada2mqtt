@@ -1,6 +1,10 @@
 # Dockerfile pour omada2mqtt
 # Utilise un build multi-stage pour optimiser la taille de l'image
 
+# Arguments de build
+ARG GIT_REF="unknown"
+ARG BUILD_DATE="unknown"
+
 # Stage 1: Build stage
 FROM node:18-alpine AS builder
 
@@ -15,6 +19,10 @@ RUN npm ci --only=production && npm cache clean --force
 
 # Stage 2: Production stage
 FROM node:18-alpine AS production
+
+# Arguments de build disponibles dans le stage final
+ARG GIT_REF
+ARG BUILD_DATE
 
 # Créer un utilisateur non-root pour la sécurité
 RUN addgroup -g 1001 -S omada2mqtt && \
@@ -53,7 +61,9 @@ VOLUME ["/app/config"]
 # Commande de démarrage
 CMD ["node", "src/index.js"]
 
-# Labels pour la métadonnée
+# Labels pour la métadonnée avec les informations de build
 LABEL maintainer="Mamath2000"
 LABEL description="omada2mqtt - Bridge entre Omada Controller et MQTT"
 LABEL version="1.0.0"
+LABEL git.ref="${GIT_REF}"
+LABEL build.date="${BUILD_DATE}"

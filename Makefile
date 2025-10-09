@@ -6,23 +6,18 @@ SERVICE_USER = $(shell whoami)
 INSTALL_DIR_BASE = /opt/omada2mqtt
 CURRENT_DIR = $(shell pwd)
 
-# Extract site name from config.conf to create unique service name
-SITE_NAME = $(shell if [ -f config.conf ]; then grep "^site" config.conf | cut -d'=' -f2 | tr -d ' ' | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g'; else echo "default"; fi)
-SERVICE_NAME = $(SERVICE_NAME_BASE)_$(SITE_NAME)
-INSTALL_DIR = $(INSTALL_DIR_BASE)_$(SITE_NAME)
-
 # Docker variables
 DOCKER_IMAGE_NAME = omada2mqtt
 DOCKER_TAG ?= latest
 DOCKER_REGISTRY ?= mathmath350
 DOCKER_FULL_NAME = $(if $(DOCKER_REGISTRY),$(DOCKER_REGISTRY)/,)$(DOCKER_IMAGE_NAME):$(DOCKER_TAG)
 
-.PHONY: all install run clean help install-service uninstall-service start stop restart status enable disable logs list-services uninstall-all docker-build docker-run docker-stop docker-clean docker-push docker-pull docker-compose-up docker-compose-down
+.PHONY: all install run clean help docker-build docker-run docker-stop docker-clean docker-push docker-pull docker-compose-up docker-compose-down docker-compose-logs docker-logs docker-status docker-build-release docker-version
 
 # Default target
 all: help
 
-# Install dependencies
+# Install dependencies (for local development)
 install:
 	@echo "Installing dependencies..."
 	@# Check if node is installed
@@ -37,9 +32,9 @@ install:
 	fi
 	npm install
 
-# Run the application (development)
+# Run the application (local development)
 run:
-	@echo "Starting application..."
+	@echo "Starting application locally..."
 	npm start
 
 # Clean up node_modules
@@ -53,11 +48,41 @@ clean:
 
 # Build Docker image
 docker-build:
-	@echo "Building Docker image: $(DOCKER_FULL_NAME)"
+	@echo "Building Docker image with metadata..."
 	@# Check if Docker is installed
 	@which docker > /dev/null || (echo "Error: Docker is not installed. Please install Docker first." && exit 1)
-	docker build -t $(DOCKER_FULL_NAME) .
-	@echo "Docker image built successfully: $(DOCKER_FULL_NAME)"
+	@# Use enhanced build script if available, otherwise fallback to simple build
+	@if [ -f scripts/build-docker.sh ]; then \
+		./scripts/build-docker.sh; \
+	else \
+		docker build -t $(DOCKER_FULL_NAME) .; \
+		echo "Docker image built successfully: $(DOCKER_FULL_NAME)"; \
+	fi
+
+# Build and release Docker image with automatic versioning
+docker-build-release:
+	@echo "Building and releasing Docker image with automatic versioning..."
+	@# Check if script exists
+	@if [ ! -f scripts/build-docker-image.sh ]; then \
+		echo "Error: scripts/build-docker-image.sh not found."; \
+		exit 1; \
+	fi
+	@# Execute the build script
+	./scripts/build-docker-image.sh
+
+# Show current version
+docker-version:
+	@echo "Current version information:"
+	@if command -v jq >/dev/null 2>&1; then \
+		echo "📦 Package version: $$(jq -r '.version' package.json)"; \
+	else \
+		echo "📦 Package version: $$(grep '"version"' package.json | cut -d'"' -f4)"; \
+	fi
+	@if command -v git >/dev/null 2>&1; then \
+		echo "🔀 Git commit: $$(git rev-parse --short HEAD 2>/dev/null || echo 'N/A')"; \
+		echo "🌿 Git branch: $$(git branch --show-current 2>/dev/null || echo 'N/A')"; \
+	fi
+	@echo "🐳 Docker image: $(DOCKER_FULL_NAME)"
 
 # Run Docker container
 docker-run:
@@ -128,172 +153,64 @@ docker-compose-down:
 	-docker-compose down
 	@echo "Docker-compose services stopped"
 
-# Install application as system service
-install-service: install
-	@echo "Installing omada2mqtt as system service..."
-	@if [ "$(shell id -u)" != "0" ]; then \
-		echo "Error: This command must be run as root (use sudo)"; \
-		exit 1; \
-	fi
-	@# Check if config.conf exists
-	@if [ ! -f config.conf ]; then \
-		echo "Error: config.conf not found. Please copy and configure config-sample.conf first."; \
-		echo "Run: cp config-sample.conf config.conf"; \
-		exit 1; \
-	fi
-	@echo "Detected site: $(SITE_NAME)"
-	@echo "Service name will be: $(SERVICE_NAME)"
-	@echo "Installation directory: $(INSTALL_DIR)"
-	@# Create installation directory
-	mkdir -p $(INSTALL_DIR)
-	@# Copy application files
-	cp -r src package.json config-sample.conf Makefile omada2mqtt.service.template $(INSTALL_DIR)/
-	@# Copy config if it exists
-	@if [ -f config.conf ]; then \
-		cp config.conf $(INSTALL_DIR)/; \
-	else \
-		echo "Warning: config.conf not found, copying sample"; \
-		cp config-sample.conf $(INSTALL_DIR)/config.conf; \
-	fi
-	@# Install dependencies in target directory
-	cd $(INSTALL_DIR) && npm install --production
-	@# Set ownership
-	chown -R $(SERVICE_USER):$(SERVICE_USER) $(INSTALL_DIR)
-	@# Create systemd service file from template
-	@echo "Creating systemd service file..."
-	@sed 's/{{SERVICE_USER}}/$(SERVICE_USER)/g; s|{{INSTALL_DIR}}|$(INSTALL_DIR)|g' \
-		$(INSTALL_DIR)/omada2mqtt.service.template > /etc/systemd/system/$(SERVICE_NAME).service
-	@# Reload systemd and enable service
-	systemctl daemon-reload
-	systemctl enable $(SERVICE_NAME)
-	@echo "Service installed successfully!"
-	@echo "Edit $(INSTALL_DIR)/config.conf with your settings"
-	@echo "Then run: sudo make start"
+# Show docker-compose logs
+docker-compose-logs:
+	@echo "Showing docker-compose logs..."
+	docker-compose logs -f
 
-# Uninstall system service
-uninstall-service:
-	@echo "Uninstalling omada2mqtt service..."
-	@if [ "$(shell id -u)" != "0" ]; then \
-		echo "Error: This command must be run as root (use sudo)"; \
-		exit 1; \
-	fi
-	@# Stop and disable service
-	-systemctl stop $(SERVICE_NAME)
-	-systemctl disable $(SERVICE_NAME)
-	@# Remove service file
-	-rm -f /etc/systemd/system/$(SERVICE_NAME).service
-	@# Remove installation directory
-	-rm -rf $(INSTALL_DIR)
-	@# Reload systemd
-	systemctl daemon-reload
-	@echo "Service uninstalled successfully!"
+# Show docker container logs
+docker-logs:
+	@echo "Showing Docker container logs..."
+	docker logs -f $(DOCKER_IMAGE_NAME)
 
-# Start service
-start:
-	@echo "Starting omada2mqtt service..."
-	systemctl start $(SERVICE_NAME)
-
-# Stop service
-stop:
-	@echo "Stopping omada2mqtt service..."
-	systemctl stop $(SERVICE_NAME)
-
-# Restart service
-restart:
-	@echo "Restarting omada2mqtt service..."
-	systemctl restart $(SERVICE_NAME)
-
-# Check service status
-status:
-	@echo "Checking omada2mqtt service status..."
-	systemctl status $(SERVICE_NAME)
-
-# Enable service (start at boot)
-enable:
-	@echo "Enabling omada2mqtt service..."
-	systemctl enable $(SERVICE_NAME)
-
-# Disable service (don't start at boot)
-disable:
-	@echo "Disabling omada2mqtt service..."
-	systemctl disable $(SERVICE_NAME)
-
-# Show service logs
-logs:
-	@echo "Showing omada2mqtt service logs..."
-	journalctl -u $(SERVICE_NAME) -f
-
-# List all omada2mqtt services
-list-services:
-	@echo "Listing all omada2mqtt services..."
-	@systemctl list-units --type=service | grep omada2mqtt || echo "No omada2mqtt services found"
-	@echo ""
-	@echo "Installation directories:"
-	@ls -la /opt/ | grep omada2mqtt || echo "No installation directories found"
-
-# Uninstall all omada2mqtt services
-uninstall-all:
-	@echo "Uninstalling ALL omada2mqtt services..."
-	@if [ "$(shell id -u)" != "0" ]; then \
-		echo "Error: This command must be run as root (use sudo)"; \
-		exit 1; \
-	fi
-	@# Stop and disable all omada2mqtt services
-	@for service in $$(systemctl list-units --type=service | grep omada2mqtt | awk '{print $$1}'); do \
-		echo "Stopping and disabling $$service"; \
-		systemctl stop $$service; \
-		systemctl disable $$service; \
-		rm -f /etc/systemd/system/$$service; \
-	done
-	@# Remove all installation directories
-	@for dir in $$(ls -d /opt/omada2mqtt* 2>/dev/null || true); do \
-		echo "Removing $$dir"; \
-		rm -rf $$dir; \
-	done
-	@# Reload systemd
-	systemctl daemon-reload
-	@echo "All omada2mqtt services uninstalled successfully!"
+# Show docker container status
+docker-status:
+	@echo "Docker container status:"
+	docker ps -a --filter name=$(DOCKER_IMAGE_NAME)
 
 # Help
 help:
+	@echo "omada2mqtt - Docker-based MQTT bridge for Omada Controller"
+	@echo ""
 	@echo "Available commands:"
 	@echo ""
-	@echo "Development:"
-	@echo "  make install          - Install dependencies"
-	@echo "  make run              - Run the application (default)"
-	@echo "  make clean            - Remove installed dependencies"
+	@echo "Local Development:"
+	@echo "  make install          - Install Node.js dependencies"
+	@echo "  make run              - Run application locally"
+	@echo "  make clean            - Remove node_modules"
 	@echo ""
-	@echo "Docker:"
+	@echo "Docker Container:"
 	@echo "  make docker-build     - Build Docker image"
 	@echo "  make docker-run       - Run Docker container (requires config.conf)"
 	@echo "  make docker-stop      - Stop and remove Docker container"
 	@echo "  make docker-clean     - Clean Docker images and containers"
-	@echo "  make docker-push      - Push image to registry (set DOCKER_REGISTRY=...)"
-	@echo "  make docker-pull      - Pull image from registry (set DOCKER_REGISTRY=...)"
+	@echo "  make docker-logs      - Show container logs (live)"
+	@echo "  make docker-status    - Show container status"
+	@echo "  make docker-version   - Show version information"
+	@echo ""
+	@echo "Docker Release:"
+	@echo "  make docker-build-release - Build, version, and publish to Docker Hub"
+	@echo ""
+	@echo "Docker Registry:"
+	@echo "  make docker-push      - Push image to registry"
+	@echo "  make docker-pull      - Pull image from registry"
 	@echo ""
 	@echo "Docker Compose:"
 	@echo "  make docker-compose-up   - Start services with docker-compose"
 	@echo "  make docker-compose-down - Stop docker-compose services"
+	@echo "  make docker-compose-logs - Show docker-compose logs (live)"
 	@echo ""
-	@echo "System Service (requires sudo and config.conf):"
-	@echo "  sudo make install-service    - Install as system service (site-specific)"
-	@echo "  sudo make uninstall-service  - Uninstall current site service"
-	@echo "  sudo make uninstall-all      - Uninstall ALL omada2mqtt services"
-	@echo ""
-	@echo "Service Management:"
-	@echo "  sudo make start       - Start the service"
-	@echo "  sudo make stop        - Stop the service"
-	@echo "  sudo make restart     - Restart the service"
-	@echo "  make status           - Show service status"
-	@echo "  sudo make enable      - Enable service at boot"
-	@echo "  sudo make disable     - Disable service at boot"
-	@echo "  make logs             - Show service logs (live)"
-	@echo "  make list-services    - List all omada2mqtt services"
+	@echo "Configuration:"
+	@echo "  cp config-sample.conf config.conf  # Create configuration file"
 	@echo ""
 	@echo "Docker Examples:"
 	@echo "  make docker-build DOCKER_TAG=v1.0.0"
-	@echo "  make docker-push DOCKER_TAG=latest                    # Push to mathmath350/omada2mqtt:latest"
+	@echo "  make docker-push DOCKER_TAG=latest                    # Push to $(DOCKER_REGISTRY)/$(DOCKER_IMAGE_NAME):latest"
 	@echo "  make docker-push DOCKER_REGISTRY=ghcr.io/mamath2000   # Push to custom registry"
 	@echo ""
-	@echo "Note: Service name will be 'omada2mqtt_<sitename>' based on config.conf"
+	@echo "Quick Start:"
+	@echo "  1. cp config-sample.conf config.conf"
+	@echo "  2. Edit config.conf with your settings"
+	@echo "  3. make docker-compose-up"
+	@echo ""
 	@echo "  make help             - Show this help message"
