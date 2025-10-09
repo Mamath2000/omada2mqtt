@@ -11,6 +11,10 @@ services:
     container_name: omada2mqtt
     restart: unless-stopped
     
+    # Exposer le port du health check
+    ports:
+      - "3000:3000"  # Health check et monitoring
+    
     # Monter le fichier de configuration depuis l'hôte
     volumes:
       # IMPORTANT: Créez d'abord votre config.conf depuis config-sample.conf
@@ -38,7 +42,8 @@ services:
     
     # Healthcheck pour vérifier que l'application fonctionne
     healthcheck:
-      test: ["CMD", "node", "-e", "process.exit(0)"]
+      # Vérifie l'endpoint de santé HTTP (plus fiable qu'un simple pgrep)
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
       retries: 3

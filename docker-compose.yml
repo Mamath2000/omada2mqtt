@@ -1,9 +1,14 @@
 services:
   omada2mqtt:
     # Utiliser l'image depuis Docker Hub
-    image: mathmath350/omada2mqtt:latest
+    # image: mathmath350/omada2mqtt:latest
+    build: .
     container_name: omada2mqtt
     restart: unless-stopped
+    
+    # Exposer le port du health check (optionnel)
+    ports:
+      - "3000:3000"
     
     # Monter le fichier de configuration
     volumes:

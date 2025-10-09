@@ -17,6 +17,14 @@ class OmadaApi {
         this.devices = {}; 
         this.mqttClient = null;
         this.siteId = omadaAuth.siteId || null;
+        this.statusCallback = null; // Callback pour mettre à jour le statut global
+    }
+
+    /**
+     * Définit une callback pour mettre à jour le statut global de l'application
+     */
+    setStatusCallback(callback) {
+        this.statusCallback = callback;
     }
 
     /**
@@ -171,6 +179,11 @@ class OmadaApi {
             } catch (err) {
                 log('error', `Exception lors de la récupération des ports pour le switch ${switchMac}:`, err.response ? err.response.data : err.message);
             }
+        }
+        
+        // Mettre à jour le statut global de l'application
+        if (this.statusCallback) {
+            this.statusCallback({ lastPolling: new Date().toISOString() });
         }
     }
 

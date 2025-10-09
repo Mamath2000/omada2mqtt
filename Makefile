@@ -144,19 +144,19 @@ docker-compose-up:
 		echo "Run: cp config-sample.conf config.conf"; \
 		exit 1; \
 	fi
-	docker-compose up -d
+	docker compose up -d
 	@echo "Services started with docker-compose"
 
 # Stop docker-compose services
 docker-compose-down:
 	@echo "Stopping docker-compose services..."
-	-docker-compose down
+	-docker compose down
 	@echo "Docker-compose services stopped"
 
 # Show docker-compose logs
 docker-compose-logs:
 	@echo "Showing docker-compose logs..."
-	docker-compose logs -f
+	docker compose logs -f
 
 # Show docker container logs
 docker-logs:

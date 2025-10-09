@@ -48,8 +48,8 @@ COPY config-sample.conf ./config-sample.conf
 # Changer vers l'utilisateur non-root
 USER omada2mqtt
 
-# Exposer le port (si nécessaire - omada2mqtt utilise MQTT donc pas de port HTTP)
-# EXPOSE 8080
+# Exposer le port pour le health check
+EXPOSE 3000
 
 # Variables d'environnement par défaut
 ENV NODE_ENV=production
