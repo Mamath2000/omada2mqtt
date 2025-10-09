@@ -12,7 +12,7 @@ services:
     
     # Monter le fichier de configuration
     volumes:
-      - ./config.conf:/app/config/config.conf:ro
+      - ./config.conf:/app/config.conf:ro
     
     # Variables d'environnement
     environment:

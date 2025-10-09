@@ -66,6 +66,8 @@ level = info
 enabled = true
 ```
 
+Le fichier `config.conf` doit être dans le **même répertoire** que le `docker-compose.yml`.
+
 ### Personnalisation avancée
 
 Pour des besoins avancés, copiez et modifiez le fichier d'exemple :

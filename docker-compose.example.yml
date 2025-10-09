@@ -18,7 +18,7 @@ services:
     # Monter le fichier de configuration depuis l'hôte
     volumes:
       # IMPORTANT: Créez d'abord votre config.conf depuis config-sample.conf
-      - ./config.conf:/app/config/config.conf:ro
+      - ./config.conf:/app/config.conf:ro
       
       # Optionnel: monter un répertoire de logs si l'application en génère
       # - ./logs:/app/logs
@@ -26,7 +26,6 @@ services:
     # Variables d'environnement
     environment:
       - NODE_ENV=production
-      - CONFIG_FILE=/app/config/config.conf
       # Optionnel: définir le niveau de log
       # - LOG_LEVEL=info
     

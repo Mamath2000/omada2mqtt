@@ -38,12 +38,11 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY src/ ./src/
 COPY package*.json ./
 
-# Créer le répertoire de configuration
-RUN mkdir -p /app/config && \
-    chown -R omada2mqtt:omada2mqtt /app
-
 # Copier le fichier de configuration d'exemple
 COPY config-sample.conf ./config-sample.conf
+
+# Définir les permissions
+RUN chown -R omada2mqtt:omada2mqtt /app
 
 # Changer vers l'utilisateur non-root
 USER omada2mqtt
@@ -53,10 +52,9 @@ EXPOSE 3000
 
 # Variables d'environnement par défaut
 ENV NODE_ENV=production
-ENV CONFIG_FILE=/app/config/config.conf
 
-# Point de montage pour la configuration
-VOLUME ["/app/config"]
+# Point de montage pour la configuration (optionnel)
+# VOLUME ["/app/config"]
 
 # Commande de démarrage
 CMD ["node", "src/index.js"]
