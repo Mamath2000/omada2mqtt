@@ -77,6 +77,13 @@ baseTopic = omada2mqtt
 
 [log]
 level = info # Log level: debug, info, warn, error
+
+[homeassistant]
+enabled = true # Enable/disable Home Assistant MQTT Discovery (true/false)
+
+[filters]
+# Liste des devices à publier (séparés par des virgules). Laisser vide pour publier tous les devices.
+includeDevices = switch_sg2428p,switch_poe_1
 ```
 
 **Détail des paramètres :**
@@ -89,6 +96,9 @@ level = info # Log level: debug, info, warn, error
 - `url` : URL du broker MQTT (ex : `mqtt://192.168.100.9`)
 - `username` / `password` : Identifiants MQTT (laisser vide si non utilisé)
 - `baseTopic` : Topic racine pour les échanges MQTT
+- `level` : Niveau de log (debug, info, warn, error)
+- `enabled` (homeassistant) : Active/désactive l'auto-discovery Home Assistant
+- `includeDevices` (filters) : Liste des devices à publier (noms séparés par des virgules, normalisés en minuscules avec underscores). Si vide, tous les devices sont publiés
 
 
 ## Fonctionnement

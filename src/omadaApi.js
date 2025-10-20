@@ -78,6 +78,15 @@ class OmadaApi {
             if (response.data.errorCode === 0 && response.data.result && response.data.result.data) {
                 const devicesArr = response.data.result.data;
                 log('info', `${devicesArr.length} devices trouvés sur le site.`);
+                
+                // Log de tous les devices avec leurs noms normalisés pour faciliter la configuration du filtre
+                log('info', '📋 Liste des devices disponibles (noms normalisés pour le filtre):');
+                devicesArr.forEach(device => {
+                    const normalizedName = (device.name || 'unknown').toLowerCase().replace(/[\s-]+/g, '_');
+                    const type = (device.type || 'unknown').toLowerCase();
+                    log('info', `  - ${normalizedName} (type: ${type}, nom original: "${device.name}")`);
+                });
+                
                 this.devices = {};
                 devicesArr.forEach(device => {
                     const type = (device.type || '').toLowerCase();
@@ -88,6 +97,14 @@ class OmadaApi {
                     const name = (device.name || 'unknown')
                         .toLowerCase()
                         .replace(/[\s-]+/g, '_');
+                    
+                    // Filtrage des devices selon la configuration
+                    const includeDevices = config.filters?.includeDevices || [];
+                    if (includeDevices.length > 0 && !includeDevices.includes(name)) {
+                        log('debug', `Device ${name} ignoré (non présent dans le filtre includeDevices)`);
+                        return;
+                    }
+                    
                     if (!this.devices[name]) this.devices[name] = { device, ports: {} };
                     else this.devices[name].device = device;
                     const topic = `${config.mqtt.baseTopic}/${type}/${name}`;

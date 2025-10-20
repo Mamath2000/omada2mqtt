@@ -35,6 +35,25 @@ try {
       config.homeassistant.enabled = config.homeassistant.enabled.toLowerCase() === 'true';
   }
   
+  // Gestion des filtres de devices
+  if (!config.filters) {
+      config.filters = {};
+  }
+  // Parse la liste des devices à inclure (séparés par des virgules)
+  if (config.filters.includeDevices) {
+      const devicesStr = config.filters.includeDevices.replace(/#.*/, '').trim();
+      if (devicesStr) {
+          config.filters.includeDevices = devicesStr
+              .split(',')
+              .map(d => d.trim().toLowerCase())
+              .filter(d => d.length > 0);
+      } else {
+          config.filters.includeDevices = [];
+      }
+  } else {
+      config.filters.includeDevices = [];
+  }
+  
   // Validation des paramètres essentiels
   if (!config.omada || !config.omada.baseUrl || !config.omada.client_id) {
     console.error('Configuration Omada incomplète. Vérifiez votre fichier config.conf');
