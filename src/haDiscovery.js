@@ -10,7 +10,7 @@ const { log } = require('./utils/logger');
  */
 function publishHADiscovery(mqttClient, devices) {
     if (!mqttClient || !devices) return;
-    
+
     Object.entries(devices).forEach(([name, entry]) => {
         const device = entry.device;
         if (!device) return;
@@ -29,90 +29,142 @@ function publishHADiscovery(mqttClient, devices) {
             serial_number: sn,
             sw_version: device.firmwareVersion || '',
             hw_version: device.modelVersion || '',
-            connections : [
+            connections: [
                 ['mac', device.mac || '00:00:00:00:00:00'],
                 ['ip', device.ip || '0.0.0.0']
             ]
         };
 
-        // Liste des sensors à déclarer
-        const sensors = [
-            { key: 'type', name: 'Type', domain: 'sensor', value_template: '{{ value_json.type }}' },
-            { key: 'ip', name: 'Adresse Ip', domain: 'sensor', value_template: '{{ value_json.ip }}' },
-            { key: 'uptime', name: 'Uptime', domain: 'sensor', value_template: '{{ value_json.uptime }}' },
-            { key: 'status', name: 'Etat', domain: 'binary_sensor', device_class: 'running', value_template: '{{ value_json.status }}' },
-            { key: 'last_seen', name: 'Dernière Détection', domain: 'sensor', device_class: 'timestamp', value_template: '{{ as_datetime(value_json.lastSeen /1000) }}' },
-            { key: 'cpuUtil', name: 'CPU', domain: 'sensor', value_template: '{{ value_json.cpuUtil }}', "unit_of_measurement": "%" },
-            { key: 'memUtil', name: 'Mémoire', domain: 'sensor', value_template: '{{ value_json.memUtil }}', "unit_of_measurement": "%" },
-            { key: 'name', name: 'Nom', domain: 'sensor', value_template: '{{ value_json.name }}' },
-            { key: 'mac', name: 'MAC', domain: 'sensor', value_template: '{{ value_json.mac }}' },
-        ];
-        sensors.forEach(sensor => {
-            // const objectId = `${entityId}_${sensor.key}`;
-            const topic = `${baseTopic}/${device.type}/${name}`;
-            const configTopic = `homeassistant/${sensor.domain}/${baseId}/${sensor.key}/config`;
-            const payload = {
-                state_topic: topic,
-                unique_id: `${baseId}_${sensor.key}`,
-                object_id: `${baseId}_${sensor.key}`,
-                device: haDevice,
-                name: `${sensor.name}`,
+        const origin = {
+            name: 'Omada2MQTT',
+            url: 'https://github.com/Mamath2000/omada2mqtt.git'
+        }
+
+        // Liste des components
+        let components = {
+            type: {
+                platform: 'sensor',
+                name: 'Type',
+                unique_id: `${baseId}_type`,
+                object_id: `${entityId}_type`,
                 has_entity_name: true,
-                expire_after: 600,
-            };
+                value_template: '{{ value_json.type }}'
 
-            // Ajouter les propriétés spécifiques selon le type de sensor
-            if (sensor.value_template) {payload.value_template = sensor.value_template;}
-            if (sensor.device_class) {payload.device_class = sensor.device_class;}
+            },
+            ip: {
+                platform: 'sensor',
+                name: 'Adresse Ip',
+                unique_id: `${baseId}_ip`,
+                object_id: `${entityId}_ip`,
+                has_entity_name: true,
+                value_template: '{{ value_json.ip }}'
+            },
+            uptime: {
+                platform: 'sensor',
+                name: 'Uptime',
+                unique_id: `${baseId}_uptime`,
+                object_id: `${entityId}_uptime`,
+                has_entity_name: true,
+                value_template: '{{ value_json.uptime }}'
+            },
+            status: {
+                platform: 'binary_sensor',
+                name: 'Etat',
+                device_class: 'running',
+                unique_id: `${baseId}_status`,
+                object_id: `${entityId}_status`,
+                has_entity_name: true,
+                value_template: '{{ value_json.status }}',
+                payload_on : 1,
+                payload_off : 0
+            },
+            last_seen: {
+                platform: 'sensor',
+                name: 'Dernière Détection',
+                device_class: 'timestamp',
+                unique_id: `${baseId}_last_seen`,
+                object_id: `${entityId}_last_seen`,
+                has_entity_name: true,
+                value_template: '{{ as_datetime(value_json.lastSeen /1000) }}'
+            },
+            cpuUtil: {
+                platform: 'sensor',
+                name: 'CPU',
+                unique_id: `${baseId}_cpu`,
+                object_id: `${entityId}_cpu`,
+                has_entity_name: true,
+                value_template: '{{ value_json.cpuUtil }}',
+                unit_of_measurement: "%"
+            },
+            memUtil: {
+                platform: 'sensor',
+                name: 'Mémoire',
+                unique_id: `${baseId}_mem`,
+                object_id: `${entityId}_mem`,
+                has_entity_name: true,
+                value_template: '{{ value_json.memUtil }}',
+                unit_of_measurement: "%"
 
-            if (sensor.domain === 'binary_sensor') {
-                // Pour binary_sensor
-                payload.payload_on = 1;
-                payload.payload_off = 0;
-
-                // binary_sensor n'a pas unit_of_measurement
-            } else if (sensor.domain === 'sensor') {
-                // Pour sensor
-                if (sensor.unit_of_measurement) {payload.unit_of_measurement = sensor.unit_of_measurement;}
+            },
+            name: {
+                platform: 'sensor',
+                name: 'Nom',
+                unique_id: `${baseId}_name`,
+                object_id: `${entityId}_name`,
+                has_entity_name: true,
+                value_template: '{{ value_json.name }}'
+            },
+            mac: {
+                platform: 'sensor',
+                name: 'MAC',
+                unique_id: `${baseId}_mac`,
+                object_id: `${entityId}_mac`,
+                has_entity_name: true,
+                value_template: '{{ value_json.mac }}'
             }
+        };
+        if (entry.ports) {
+            Object.entries(entry.ports).forEach(([portNum, port]) => {
+                
+                const objectId = `${entityId}_port${portNum}`;
+                const stateTopic = `${baseTopic}/switch/${name}/ports/port${portNum}/poeState`;
+                const commandTopic = `${baseTopic}/switch/${name}/ports/port${portNum}/poeState/set`;
 
-            log('debug', `Publishing HA Discovery: topic=${configTopic}, payload=${JSON.stringify(payload)}`);
-            mqttClient.publish(configTopic, JSON.stringify(payload), { retain: true }, (err) => {
-                if (err) {
-                    console.error('Erreur MQTT:', err);
-                } else {
-                    log('debug', `HA Discovery publié avec succès sur ${configTopic}`);
+                components[objectId]= {
+                    platform: 'switch',
+                    name: port.name,
+                    state_topic: stateTopic,
+                    command_topic: commandTopic,
+                    unique_id: `${baseId}_port${portNum}`,
+                    object_id: `${entityId}_port${portNum}`,
+                    device_class: 'outlet',
+                    value_template: '{{ value }}',
+                    has_entity_name: true,
+                    payload_on: 1,
+                    payload_off: 0,
+                    state_on: 1,
+                    state_off: 0
                 }
             });
-          
-            if (entry.ports) {
-                Object.entries(entry.ports).forEach(([portNum, port]) => {
-                    if (port.isPOE) {
-                        // sg2008p_port2_poe_switch
-                        const objectId = `${entityId}_port${portNum}`;
-                        const stateTopic = `${baseTopic}/switch/${name}/ports/port${portNum}/poeState`;
-                        const commandTopic = `${baseTopic}/switch/${name}/ports/port${portNum}/poeState/set`;
-                        const configTopic = `homeassistant/switch/${baseId}/port${portNum}/config`;
-                        const payload = {
-                            name: port.name,
-                            state_topic: stateTopic,
-                            command_topic: commandTopic,
-                            unique_id: `${baseId}_port${portNum}`,
-                            object_id: `${baseId}_port${portNum}`,
-                            device_class: 'outlet',
-                            value_template: '{{ value }}',
-                            has_entity_name: true,
-                            device: haDevice,
-                            payload_on: 1,
-                            payload_off: 0,
-                            state_on: 1,
-                            state_off: 0,
-                        };
-                        mqttClient.publish(configTopic, JSON.stringify(payload), { retain: true });
-                    }
-                });
+        }
+
+        const configTopic = `homeassistant/device/omada/${baseId}/config`;
+        const payload = {
+            device: haDevice,
+            origin: origin,
+            state_topic: `${baseTopic}/${device.type}/${name}`,
+            components: components,
+        };
+
+        log('debug', `Publishing HA Discovery: topic=${configTopic}, payload=${JSON.stringify(payload)}`);
+        mqttClient.publish(configTopic, JSON.stringify(payload), { retain: true }, (err) => {
+            if (err) {
+                console.error('Erreur MQTT:', err);
+            } else {
+                log('debug', `HA Discovery publié avec succès sur ${configTopic}`);
             }
         });
+
     });
     log('info', 'Publication Home Assistant MQTT Discovery terminée.');
 }
