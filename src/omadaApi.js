@@ -151,6 +151,8 @@ class OmadaApi {
         const switches = Object.entries(this.devices)
             .filter(([name, entry]) => entry.device && (entry.device.type || '').toLowerCase() === 'switch');
 
+        // Pour éviter de republier si le payload n'a pas changé, on garde un cache local par topic
+        if (!this._lastPortPayloads) this._lastPortPayloads = {};
         for (const [identifier, entry] of switches) {
             const sw = entry.device;
             const switchMac = sw.mac;
@@ -178,16 +180,19 @@ class OmadaApi {
                         };
                         this.devices[identifier].ports[portNum] = publishData;
                         if (this.mqttClient) {
-                            Object.entries(publishData).forEach(([key, value]) => {
-                                const fieldTopic = `${topic}/${key}`;
-                                this.mqttClient.publish(fieldTopic, JSON.stringify(value), { retain: false }, (err) => {
+                            const payload = JSON.stringify(publishData);
+                            if (this._lastPortPayloads[topic] !== payload) {
+                                this.mqttClient.publish(topic, payload, { retain: true }, (err) => {
                                     if (err) {
-                                        log('error', `Publication MQTT échouée pour ${fieldTopic}:`, err);
+                                        log('error', `Publication MQTT échouée pour ${topic}:`, err);
                                     } else {
-                                        log('debug', `Champ ${key} du port ${portNum} publié sur ${fieldTopic}`);
+                                        log('debug', `Port ${portNum} publié sur ${topic}`);
                                     }
                                 });
-                            });
+                                this._lastPortPayloads[topic] = payload;
+                            } else {
+                                log('debug', `Aucune modification pour ${topic}, publication ignorée.`);
+                            }
                         }
                     }
                 } else {

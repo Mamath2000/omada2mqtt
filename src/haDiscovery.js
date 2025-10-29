@@ -127,8 +127,8 @@ function publishHADiscovery(mqttClient, devices) {
             Object.entries(entry.ports).forEach(([portNum, port]) => {
                 
                 const objectId = `${entityId}_port${portNum}`;
-                const stateTopic = `${baseTopic}/switch/${name}/ports/port${portNum}/poeState`;
-                const commandTopic = `${baseTopic}/switch/${name}/ports/port${portNum}/poeState/set`;
+                const stateTopic = `${baseTopic}/switch/${name}/ports/port${portNum}`;
+                const commandTopic = `${baseTopic}/switch/${name}/ports/port${portNum}/poeStateSet`;
 
                 components[objectId]= {
                     platform: 'switch',
@@ -138,7 +138,7 @@ function publishHADiscovery(mqttClient, devices) {
                     unique_id: `${baseId}_port${portNum}`,
                     object_id: `${entityId}_port${portNum}`,
                     device_class: 'outlet',
-                    value_template: '{{ value }}',
+                    value_template: '{{ value_json.poeState |int }}',
                     has_entity_name: true,
                     payload_on: 1,
                     payload_off: 0,

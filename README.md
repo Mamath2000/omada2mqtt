@@ -133,16 +133,16 @@ Pour chaque switch détecté, le programme publie l'état de chaque port individ
 
 Le programme permet de contrôler l'état PoE des ports via MQTT :
 
-- **Topic de commande** : `<baseTopic>/switch/<nom_switch>/ports/port<numero>/poeState/set`
+- **Topic de commande** : `<baseTopic>/switch/<nom_switch>/ports/port<numero>/poeStateSet`
 - **Payload** : `1` (activer PoE) ou `0` (désactiver PoE)
 
 Exemple :
 ```bash
 # Activer le PoE sur le port 5 du switch SG2008P
-mosquitto_pub -h <broker> -t "omada2mqtt/switch/sg2008p/ports/port5/poeState/set" -m "1"
+mosquitto_pub -h <broker> -t "omada2mqtt/switch/sg2008p/ports/port5/poeStateSet" -m "1"
 
 # Désactiver le PoE sur le port 5 du switch SG2008P  
-mosquitto_pub -h <broker> -t "omada2mqtt/switch/sg2008p/ports/port5/poeState/set" -m "0"
+mosquitto_pub -h <broker> -t "omada2mqtt/switch/sg2008p/ports/port5/poeStateSet" -m "0"
 ```
 
 ### Intégration Home Assistant
@@ -177,7 +177,7 @@ Les entities apparaissent automatiquement dans Home Assistant sous **Paramètres
 ### Topics de commande (pour contrôle)
 
 ```
-<baseTopic>/switch/<nom_switch>/ports/port<X>/poeState/set                # Contrôle PoE (payload: 1 ou 0)
+<baseTopic>/switch/<nom_switch>/ports/port<X>/poeStateSet                # Contrôle PoE (payload: 1 ou 0)
 ```
 
 ### Topics Home Assistant Discovery (automatiques)

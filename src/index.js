@@ -149,7 +149,7 @@ async function main() {
     await omadaApi.startPolling(60, 5);
 
     // Souscription aux commandes PoE
-    mqttClient.subscribe(`${config.mqtt.baseTopic}/switch/+/ports/+/poeState/set`, (err) => {
+    mqttClient.subscribe(`${config.mqtt.baseTopic}/switch/+/ports/+/poeStateSet`, (err) => {
       if (err) {
         log('error', 'Erreur lors de la souscription aux topics de commande PoE:', err);
       } else {
@@ -165,8 +165,8 @@ async function main() {
 
   mqttClient.on('message', (topic, message) => {
     log('info', `Message reçu sur le topic ${topic}: ${message.toString()}`);
-    // Gestion des commandes PoE : omada2mqtt/switch/{switch}/ports/port{num}/poeState/set
-    const regex = new RegExp(`^${config.mqtt.baseTopic}/switch/([^/]+)/ports/port(\\d+)/poeState/set$`);
+    // Gestion des commandes PoE : omada2mqtt/switch/{switch}/ports/port{num}/poeStateSet
+    const regex = new RegExp(`^${config.mqtt.baseTopic}/switch/([^/]+)/ports/port(\\d+)/poeStateSet$`);
     const match = topic.match(regex);
     if (match) {
       const switchName = match[1];
