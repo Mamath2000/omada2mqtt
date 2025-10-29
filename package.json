@@ -1,6 +1,6 @@
 {
   "name": "omada2mqtt",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "",
   "main": "src/index.js",
   "scripts": {
