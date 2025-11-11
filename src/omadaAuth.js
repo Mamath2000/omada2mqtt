@@ -128,12 +128,12 @@ class omadaAuth {
                 response.data.result.data.forEach(site => {
                     log('info', `  - ${site.name} (siteId: ${site.siteId})`);
                 });
-                const site = response.data.result.data.find(s => s.name === config.omada.site);
+                const site = response.data.result.data.find(s => s.name === config.omada.siteName);
                 if (site) {
                     this.siteId = site.siteId;
-                    log('info', `ID du site '${config.omada.site}' trouvé: ${this.siteId}`);
+                    log('info', `ID du site '${config.omada.siteName}' trouvé: ${this.siteId}`);
                 } else {
-                    log('warn', `Le site '${config.omada.site}' n'a pas été trouvé.`);
+                    log('warn', `Le site '${config.omada.siteName}' n'a pas été trouvé.`);
                 }
             } else {
                 log('warn', 'Erreur lors de la récupération des sites, réponse inattendue:', response.data);

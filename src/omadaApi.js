@@ -107,7 +107,7 @@ class OmadaApi {
                     
                     if (!this.devices[name]) this.devices[name] = { device, ports: {} };
                     else this.devices[name].device = device;
-                    const topic = `${config.mqtt.baseTopic}/${type}/${name}`;
+                    const topic = `${config.mqtt.baseTopic}/${config.omada.site}/${type}/${name}`;
                     if (this.mqttClient) {
                         this.mqttClient.publish(topic, JSON.stringify(device), { retain: false }, (err) => {
                             if (err) {
@@ -146,6 +146,12 @@ class OmadaApi {
      */
     async #publishSwitchPorts() {
         if (!this.isSiteIdSet()) return;
+        
+        // Vérifier si la gestion des ports PoE est activée
+        if (!config.features || !config.features.enablePoePorts) {
+            log('debug', 'Gestion des ports PoE désactivée dans la configuration');
+            return;
+        }
 
         // On ne traite que les switches
         const switches = Object.entries(this.devices)
@@ -170,7 +176,7 @@ class OmadaApi {
                     if (!this.devices[identifier].ports) this.devices[identifier].ports = {};
                     for (const element of ports) {
                         const portNum = element.port;
-                        const topic = `${config.mqtt.baseTopic}/switch/${identifier}/ports/port${portNum}`;
+                        const topic = `${config.mqtt.baseTopic}/${config.omada.site}/switch/${identifier}/ports/port${portNum}`;
                         const publishData = {
                             name: element.name,
                             isPOE: isPoeSwitch,
@@ -218,6 +224,12 @@ class OmadaApi {
      */
     async setSwitchPortPoe(switchName, portNum, action) {
         if (!this.isSiteIdSet()) return;
+        
+        // Vérifier si la gestion des ports PoE est activée
+        if (!config.features || !config.features.enablePoePorts) {
+            log('warn', 'Gestion des ports PoE désactivée dans la configuration');
+            return;
+        }
 
         // Vérifier que le switch et le port existent dans la nouvelle structure
         if (!this.devices[switchName] || !this.devices[switchName].ports[portNum]) {

@@ -56,7 +56,7 @@ const healthServer = http.createServer((req, res) => {
         },
         omada: {
           baseUrl: config.omada.baseUrl,
-          site: config.omada.site
+          site: config.omada.siteName
         },
         homeassistant: {
           enabled: config.homeassistant?.enabled || false
@@ -106,9 +106,18 @@ async function main() {
     Object.assign(appStatus, updates);
   });
 
+  // Configuration du Last Will and Testament (LWT) pour le statut offline
+  const lwt = {
+    topic: `${config.mqtt.baseTopic}/bridge/lwt`,
+    payload: JSON.stringify('offline'),
+    qos: 1,
+    retain: true
+  };
+
   const mqttClient = mqtt.connect(config.mqtt.url, {
     username: config.mqtt.username,
-    password: config.mqtt.password
+    password: config.mqtt.password,
+    will: lwt
   });
 
   mqttClient.on('connect', async () => {
@@ -148,14 +157,18 @@ async function main() {
     // Démarrage du polling automatique (devices et ports)
     await omadaApi.startPolling(60, 5);
 
-    // Souscription aux commandes PoE
-    mqttClient.subscribe(`${config.mqtt.baseTopic}/switch/+/ports/+/poeStateSet`, (err) => {
-      if (err) {
-        log('error', 'Erreur lors de la souscription aux topics de commande PoE:', err);
-      } else {
-        log('info', 'Souscription aux commandes PoE MQTT prête.');
-      }
-    });
+    // Souscription aux commandes PoE seulement si la fonctionnalité est activée
+    if (config.features && config.features.enablePoePorts) {
+      mqttClient.subscribe(`${config.mqtt.baseTopic}/${config.omada.site}/switch/+/ports/+/poeStateSet`, (err) => {
+        if (err) {
+          log('error', 'Erreur lors de la souscription aux topics de commande PoE:', err);
+        } else {
+          log('info', 'Souscription aux commandes PoE MQTT prête.');
+        }
+      });
+    } else {
+      log('info', 'Gestion des ports PoE désactivée, pas de souscription aux commandes PoE');
+    }
   });
 
   mqttClient.on('error', (err) => {
@@ -166,7 +179,7 @@ async function main() {
   mqttClient.on('message', (topic, message) => {
     log('info', `Message reçu sur le topic ${topic}: ${message.toString()}`);
     // Gestion des commandes PoE : omada2mqtt/switch/{switch}/ports/port{num}/poeStateSet
-    const regex = new RegExp(`^${config.mqtt.baseTopic}/switch/([^/]+)/ports/port(\\d+)/poeStateSet$`);
+    const regex = new RegExp(`^${config.mqtt.baseTopic}/${config.omada.site}/switch/([^/]+)/ports/port(\\d+)/poeStateSet$`);
     const match = topic.match(regex);
     if (match) {
       const switchName = match[1];
@@ -179,6 +192,47 @@ async function main() {
       }
     }
   });
+
+  // Gestion de l'arrêt propre du programme
+  const gracefulShutdown = async (signal) => {
+    log('info', `Signal ${signal} reçu, arrêt en cours...`);
+    
+    // Publier le statut offline avant de se déconnecter
+    if (mqttClient && mqttClient.connected) {
+      await new Promise((resolve) => {
+        mqttClient.publish(
+          `${config.mqtt.baseTopic}/${config.omada.site}/bridge/state`,
+          JSON.stringify({ state: 'offline' }),
+          { retain: true, qos: 1 },
+          () => {
+            log('info', 'Statut offline publié');
+            resolve();
+          }
+        );
+      });
+      
+      // Arrêter le polling
+      omadaApi.stopPolling();
+      
+      // Déconnecter MQTT proprement
+      await new Promise((resolve) => {
+        mqttClient.end(false, {}, () => {
+          log('info', 'Client MQTT déconnecté');
+          resolve();
+        });
+      });
+    }
+    
+    // Arrêter le serveur de santé
+    healthServer.close(() => {
+      log('info', 'Serveur de santé arrêté');
+      process.exit(0);
+    });
+  };
+
+  // Écouter les signaux d'arrêt
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 }
 
 main();

@@ -19,6 +19,19 @@ try {
   // Pour compatibilité descendante avec l'ancien format
   if (config.omada) {
       config.omada.omadac_id = config.omada.omadac_id || config.omada.omadac_id;
+      
+      // Normalisation du nom du site
+      if (config.omada.site) {
+          // Conserver le nom original dans config.omada.name
+          config.omada.siteName = config.omada.site;
+          // Normaliser le site (minuscules, sans caractères spéciaux)
+          config.omada.site = config.omada.site
+              .toLowerCase()
+              .normalize('NFD')
+              .replace(/[\u0300-\u036f]/g, '') // Supprimer les accents
+              .replace(/[^a-z0-9]+/g, '_')      // Remplacer les caractères spéciaux par _
+              .replace(/^_+|_+$/g, '');         // Supprimer les _ en début/fin
+      }
   }
   if (config.mqtt) {
       config.mqtt.baseTopic = config.mqtt.baseTopic || config.mqtt.baseTopic;
@@ -52,6 +65,17 @@ try {
       }
   } else {
       config.filters.includeDevices = [];
+  }
+  
+  // Gestion des features
+  if (!config.features) {
+      config.features = {};
+  }
+  // Activer/désactiver la gestion des ports PoE (par défaut: true)
+  if (config.features.enablePoePorts === undefined) {
+      config.features.enablePoePorts = false;
+  } else if (typeof config.features.enablePoePorts === 'string') {
+      config.features.enablePoePorts = config.features.enablePoePorts.toLowerCase() === 'true';
   }
   
   // Validation des paramètres essentiels
